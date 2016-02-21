@@ -9,12 +9,12 @@ class explore extends AWS_CONTROLLER
 	public function get_access_rule()
 	{
 		$rule_action['rule_type'] = "white"; //'black'黑名单,黑名单中的检查  'white'白名单,白名单以外的检查
-		
+
 		if ($this->user_info['permission']['visit_explore'] AND $this->user_info['permission']['visit_site'])
 		{
 			$rule_action['actions'][] = 'index';
 		}
-		
+
 		return $rule_action;
 	}
 
@@ -28,18 +28,28 @@ class explore extends AWS_CONTROLLER
 		}
 	}
 
-	
+
 	//GET: category(选),per_page(选，默认:10),sort_type([new,hot]选,默认:最新),page(默认1),day(默认30),is_recommend
 	public function index_action()
 	{
 		$per_page = get_setting('contents_per_page');
+
+
 
 		if($_GET['per_page'])
 		{
 			$per_page = intval($_GET['per_page']);
 		}
 
-		
+        if($_GET['uid'])
+        {
+            $posts_list = $this->model('myapi')->get_posts_list_by_uid();
+            H::ajax_json_output(AWS_APP::RSM(array(
+                'rows'=>$posts_list
+            ), 1, null));
+        }
+
+
 		if ($_GET['category'])
 		{
 			if (is_digits($_GET['category']))
@@ -83,10 +93,12 @@ class explore extends AWS_CONTROLLER
 		$topics_key = array( 'topic_id', 'topic_title' );
 		$user_info_key = array( 'uid', 'user_name' );
 
+//        var_dump($posts_list);exit;
+
 		if($posts_list)
 		{
 			foreach ($posts_list as $key => $val)
-			{	
+			{
 				$posts_list_key = $article_key;
 
 				if($val['post_type'] == 'question')
@@ -99,7 +111,7 @@ class explore extends AWS_CONTROLLER
 					if(!in_array($k, $posts_list_key)) unset($posts_list[$key][$k]);
 				}
 
-				if($val['user_info']) 
+				if($val['user_info'])
 				{
 					foreach ($val['user_info'] as $k => $v)
 					{
@@ -109,7 +121,7 @@ class explore extends AWS_CONTROLLER
 					$posts_list[$key]['user_info']['avatar_file'] = get_avatar_url($posts_list[$key]['user_info']['uid'],'mid');
 				}
 
-				if(is_array($val['topics'])) 
+				if(is_array($val['topics']))
 				{
 					foreach ($val['topics'] as $kk => $vv)
 					{
@@ -120,7 +132,7 @@ class explore extends AWS_CONTROLLER
 					}
 				}
 
-				if(is_array($val['answer_users'])) 
+				if(is_array($val['answer_users']))
 				{
 					foreach ($val['answer_users'] as $kk => $vv)
 					{
@@ -134,7 +146,7 @@ class explore extends AWS_CONTROLLER
 				}
 
 				$posts_list[$key]['answer_users'] = array_values($posts_list[$key]['answer_users']);
-			}	
+			}
 		}
 		else
 		{
@@ -143,9 +155,9 @@ class explore extends AWS_CONTROLLER
 
 
 
-		H::ajax_json_output(AWS_APP::RSM(array( 
+		H::ajax_json_output(AWS_APP::RSM(array(
 							 	'total_rows'=>count($posts_list),
-							 	'rows'=>$posts_list 
+							 	'rows'=>$posts_list
 		 				), 1, null));
 	}
 }
