@@ -236,7 +236,16 @@ class account extends AWS_CONTROLLER
 
         $this->model('people')->update_views($user_info['uid']);
 
-        $user_info_key = array('uid', 'user_name', 'sex', 'province', 'city', 'avatar_file', 'fans_count', 'friend_count', 'article_count', 'question_count', 'answer_count', 'topic_focus_count', 'agree_count', 'thanks_count', 'views_count', 'signature');
+        $user_info_key = array('uid', 'user_name', 'sex', 'province', 'city', 'avatar_file', 'fans_count', 'friend_count', 'article_count', 'question_count', 'answer_count', 'topic_focus_count', 'agree_count', 'thanks_count', 'views_count', 'signature', 'isMedia', 'isFamous');
+
+        $user_info['isMedia'] = false;
+        $user_info['isFamous'] = false;
+
+        if($user_info['group_id'] == 100) {
+            $user_info['isMedia'] = true;
+        } else if($user_info['group_id'] == 101){
+            $user_info['isFamous'] = true;
+        }
 
         foreach ($user_info as $k => $v) {
             if (!in_array($k, $user_info_key)) unset($user_info[$k]);
@@ -261,6 +270,7 @@ class account extends AWS_CONTROLLER
         if ($this->user_id AND $this->model('follow')->user_follow_check($this->user_id, $user_info['uid'])) {
             $user_info['has_focus'] = 1;
         }
+
 
         H::ajax_json_output(AWS_APP::RSM($user_info, 1, null));
     }

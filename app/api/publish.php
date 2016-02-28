@@ -297,11 +297,6 @@ class publish extends AWS_CONTROLLER
         }
     }
 
-
-
-
-
-
     //对文章进行评论
     // POST  article_id,message,at_uid(可选)
     public function save_comment_action()
@@ -606,6 +601,17 @@ class publish extends AWS_CONTROLLER
                 'article_id' => $article_id
             ), 1, null));
         }
+    }
+
+
+    public function publish_article_by_url_action() //
+    {
+        $result = $this->model('myapi')->publish_article_by_url($_POST['url'], $this->user_id);
+        switch ($result) {
+
+        }
+        H::ajax_json_output(AWS_APP::RSM(array(), 1, null));
+
     }
 
 

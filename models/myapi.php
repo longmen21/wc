@@ -3,6 +3,8 @@ if (!defined('IN_ANWSION')) {
     die;
 }
 
+require_once 'simple_html_dom.php';
+
 class myapi_class extends AWS_MODEL
 {
 
@@ -107,7 +109,9 @@ class myapi_class extends AWS_MODEL
         return $this->fetch_page('app_log', $where, $order, $page, $limit);
     }
 
-    public function get_posts_list_by_uid($uid, $isMedia = false, $isFamous = false, $post_type, $page = 1, $per_page = 10, $sort = null, $topic_ids = null, $category_id = null, $answer_count = null, $day = 30, $is_recommend = false)
+    public function get_posts_list_by_uid($uid, $isMedia = false, $isFamous = false,
+                                          $post_type, $page = 1, $per_page = 10, $sort = null,
+                                          $category_id = null, $answer_count = null, $day = 30, $is_recommend = false)
     {
         $order_key = 'add_time DESC';
 
@@ -128,47 +132,106 @@ class myapi_class extends AWS_MODEL
                 break;
         }
 
-        if (is_array($topic_ids)) {
-            foreach ($topic_ids AS $key => $val) {
-                if (!$val) {
-                    unset($topic_ids[$key]);
-                }
-            }
-        }
+        $where = array();
 
-        if ($topic_ids) {
-            $posts_index = $this->get_posts_list_by_topic_ids($post_type, $post_type, $topic_ids, $category_id, $answer_count, $order_key, $is_recommend, $page, $per_page);
+        if ($uid) {
+            $where[] = "uid = " . intval($uid);
         } else {
-            $where = array();
-
-            if (isset($answer_count)) {
-                $answer_count = intval($answer_count);
-
-                if ($answer_count == 0) {
-                    $where[] = "answer_count = " . $answer_count;
-                } else if ($answer_count > 0) {
-                    $where[] = "answer_count >= " . $answer_count;
+            $group_id = 0;
+            if ($isFamous) {
+                $group_id = 100;
+            } else {
+                $group_id = 101;
+            }
+            $this->select('uid');
+            $user_index = $this->fetch_all('users', 'group_id = ' . $group_id);
+            $str = "uid in (";
+            foreach ($user_index as $key => $val) {
+                $str .= $val['uid'];
+                if ($key != sizeof($user_index) - 1) {
+                    $str .= ',';
                 }
             }
-
-            if ($is_recommend) {
-                $where[] = 'is_recommend = 1';
-            }
-
-            if ($category_id) {
-                $where[] = 'category_id IN(' . implode(',', $this->model('system')->get_category_with_child_ids('question', $category_id)) . ')';
-            }
-
-            if ($post_type) {
-                $where[] = "post_type = '" . $this->quote($post_type) . "'";
-            }
-
-            $posts_index = $this->fetch_page('posts_index', implode(' AND ', $where), $order_key, $page, $per_page);
-
-            $this->posts_list_total = $this->found_rows();
+            $str .= ")";
+            $where[] = $str;
         }
 
-        return $this->process_explore_list_data($posts_index);
+        $where[] = "answer_count = " . '0';
+
+        if (isset($answer_count)) {
+            $answer_count = intval($answer_count);
+
+            if ($answer_count == 0) {
+                $where[] = "answer_count = " . $answer_count;
+            } else if ($answer_count > 0) {
+                $where[] = "answer_count >= " . $answer_count;
+            }
+        }
+
+        if ($is_recommend) {
+            $where[] = 'is_recommend = 1';
+        }
+
+        if ($category_id) {
+            $where[] = 'category_id IN(' . implode(',', $this->model('system')->get_category_with_child_ids('question', $category_id)) . ')';
+        }
+
+        if ($post_type) {
+            $where[] = "post_type = '" . $this->quote($post_type) . "'";
+        }
+
+        $posts_index = $this->fetch_page('posts_index', implode(' AND ', $where), $order_key, $page, $per_page);
+
+        $this->posts_list_total = $this->found_rows();
+
+        return $this->model('posts')->process_explore_list_data($posts_index);
+    }
+
+    public function publish_article_by_url($url = false, $uid = false)
+    {
+        if ($this->ping_url($url)) {
+            return false; //
+        }
+        $body = file_get_html($url);
+        $title = $body->find('title')[0]->plaintext; //
+        $outline = '';
+        $picUrl = $body->find('img')[0]->src;
+        $filePath = ''; //
+        if (!$filePath = $this->save_img($picUrl, $filePath)) { //
+            return false; //
+        }
+        $this->insert('article', array(
+            'uid' => $uid,
+            'title' => $title,
+            'message' => serialize(array('url' => $url, 'imgUrl' => $filePath, 'outline' => $outline)),
+            'category_id' => '',
+        ));
+        return true;
+    }
+
+    private function ping_url($url = false)
+    {
+        if (@fopen($url, 'r')) {
+            return false;
+        } else {
+            return true;
+        }
+    }
+
+    private function save_img($url, $filepath)
+    {
+        //判断路经是否存在
+        !is_dir($filepath) ? mkdir($filepath) : null;
+
+        //获得随机的图片名，并加上后辍名
+        $filetime = time();
+        $filename = date("YmdHis", $filetime) . rand(100, 999) . '.' . substr($url, -3, 3);
+
+        //读取图片
+        $img = file_get_contents($url);
+        //写入图片到指定的文本
+        @file_put_contents($filepath . '/' . $filename, $img);
+        return '/' . $filepath . '/' . $filename;
     }
 
 }
