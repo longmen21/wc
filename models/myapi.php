@@ -2,12 +2,10 @@
 if (!defined('IN_ANWSION')) {
     die;
 }
-
 require_once 'simple_html_dom.php';
 
 class myapi_class extends AWS_MODEL
 {
-
     public function get_answer_ids($uid)
     {
         return $this->fetch_all('answer', "uid = '" . $uid . "'");
@@ -26,73 +24,60 @@ class myapi_class extends AWS_MODEL
     public function get_clean_user_info($user_info)
     {
         $user_info_key = array('uid', 'user_name', 'signature');
-
         if (is_array($user_info)) {
             foreach ($user_info as $k => $v) {
                 if (!in_array($k, $user_info_key)) unset($user_info[$k]);
             }
-
             $user_info['avatar_file'] = get_avatar_url($user_info['uid'], 'mid');
         }
-
         return $user_info;
     }
-
 
     public function verify_signature($class_name, $mobile_sign = null)
     {
         if (!$mobile_app_secret = AWS_APP::cache()->get('mobile_app_secret')) //缓存
         {
             if (!$mobile_app_secret = $this->fetch_one('system_setting', 'value', "varname = 'mobile_app_secret'")) {
-                return true;  //从未设置  无需验证
+                return true; //从未设置  无需验证
             }
-
             AWS_APP::cache()->set('mobile_app_secret', $mobile_app_secret, 600);
         }
-
         if (!$mobile_app_secret = unserialize($mobile_app_secret)) {
-            return true;  //留白  无需验证 
+            return true; //留白  无需验证
         }
-
         if (!$mobile_sign) {
             return false;
         }
-
         $mobile_app_secret_arr = explode("\n", $mobile_app_secret);
-
         foreach ($mobile_app_secret_arr as $key => $val) {
             if (md5($class_name . $val) == $mobile_sign) {
                 return true;
             }
         }
-
         return false;
     }
 
     public function save_mobile_app_secret($mobile_app_secret)
     {
-        if ($this->fetch_row('system_setting', "varname = 'mobile_app_secret'"))  //修改
+        if ($this->fetch_row('system_setting', "varname = 'mobile_app_secret'")) //修改
         {
             $this->update('system_setting', array(
                 'value' => serialize($mobile_app_secret)
             ), "`varname` = 'mobile_app_secret'");
-
             $this->update('system_setting', array(
                 'value' => serialize(time())
             ), "`varname` = 'mobile_app_secret_update_time'");
-        } else  //新增
+        } else //新增
         {
             $this->insert('system_setting', array(
                 'value' => serialize($mobile_app_secret),
                 'varname' => 'mobile_app_secret'
             ));
-
             $this->insert('system_setting', array(
                 'value' => serialize(time()),
                 'varname' => 'mobile_app_secret_update_time'
             ));
         }
-
         AWS_APP::cache()->delete('mobile_app_secret');
     }
 
@@ -114,26 +99,18 @@ class myapi_class extends AWS_MODEL
                                           $category_id = null, $answer_count = null, $day = 30, $is_recommend = false)
     {
         $order_key = 'add_time DESC';
-
         switch ($sort) {
             case 'responsed':
                 $answer_count = 1;
-
                 break;
-
             case 'unresponsive':
                 $answer_count = 0;
-
                 break;
-
             case 'new' :
                 $order_key = 'update_time DESC';
-
                 break;
         }
-
         $where = array();
-
         if ($uid) {
             $where[] = "uid = " . intval($uid);
         } else {
@@ -155,58 +132,60 @@ class myapi_class extends AWS_MODEL
             $str .= ")";
             $where[] = $str;
         }
-
         $where[] = "answer_count = " . '0';
-
         if (isset($answer_count)) {
             $answer_count = intval($answer_count);
-
             if ($answer_count == 0) {
                 $where[] = "answer_count = " . $answer_count;
             } else if ($answer_count > 0) {
                 $where[] = "answer_count >= " . $answer_count;
             }
         }
-
         if ($is_recommend) {
             $where[] = 'is_recommend = 1';
         }
-
         if ($category_id) {
             $where[] = 'category_id IN(' . implode(',', $this->model('system')->get_category_with_child_ids('question', $category_id)) . ')';
         }
-
         if ($post_type) {
             $where[] = "post_type = '" . $this->quote($post_type) . "'";
         }
-
         $posts_index = $this->fetch_page('posts_index', implode(' AND ', $where), $order_key, $page, $per_page);
-
         $this->posts_list_total = $this->found_rows();
-
         return $this->model('posts')->process_explore_list_data($posts_index);
     }
 
     public function publish_article_by_url($url = false, $uid = false)
     {
         if ($this->ping_url($url)) {
-            return false; //
+            return '-2'; //
         }
         $body = file_get_html($url);
         $title = $body->find('title')[0]->plaintext; //
-        $outline = '';
-        $picUrl = $body->find('img')[0]->src;
-        $filePath = ''; //
-        if (!$filePath = $this->save_img($picUrl, $filePath)) { //
-            return false; //
+
+        $outline = $title . '...';
+
+        $imgs = $body->find('img');
+
+        foreach($imgs as $p) {
+            if(!$p->src) {
+                $picUrl = $p->src;
+            }
         }
-        $this->insert('article', array(
+
+        $filePath = 'uploads/share/'; //
+        if (!$filePath = $this->save_img($picUrl, $filePath)) { //
+            return '-1'; //
+        }
+        $article_id = $this->insert('article', array(
             'uid' => $uid,
             'title' => $title,
             'message' => serialize(array('url' => $url, 'imgUrl' => $filePath, 'outline' => $outline)),
-            'category_id' => '',
+            'category_id' => 2,
+            'add_time' => time(),
+            'is_recommend' => 1
         ));
-        return true;
+        return $article_id;
     }
 
     private function ping_url($url = false)
@@ -220,18 +199,24 @@ class myapi_class extends AWS_MODEL
 
     private function save_img($url, $filepath)
     {
-        //判断路经是否存在
-        !is_dir($filepath) ? mkdir($filepath) : null;
-
-        //获得随机的图片名，并加上后辍名
+        @!is_dir($filepath) ? mkdir($filepath) : null;
         $filetime = time();
-        $filename = date("YmdHis", $filetime) . rand(100, 999) . '.' . substr($url, -3, 3);
+        $filename = date("YmdHis", $filetime) . rand(100, 999);
 
-        //读取图片
         $img = file_get_contents($url);
-        //写入图片到指定的文本
-        @file_put_contents($filepath . '/' . $filename, $img);
-        return '/' . $filepath . '/' . $filename;
-    }
 
+        $finfo = new finfo(FILEINFO_MIME_TYPE);
+        $mime_type = $finfo->buffer($img);
+
+        $ext = explode("/",$mime_type)[1];
+
+        $ext_array = array('jpeg','jpg','gif','bmp','png','svg');
+
+        if(!in_array($ext,$ext_array)) {
+            $ext = 'png';
+        }
+
+        @file_put_contents($filepath . $filename . '.' . $ext, $img);
+        return $filepath . $filename . '.' . $ext;
+    }
 }

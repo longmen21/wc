@@ -79,7 +79,7 @@ class explore extends AWS_CONTROLLER
             }
         }
 
-        $question_key = array('post_type', 'question_id', 'question_content', 'add_time', 'answer_count', 'view_count', 'agree_count', 'against_count', 'answer_users', 'topics', 'user_info');
+//        $question_key = array('post_type', 'question_id', 'question_content', 'add_time', 'answer_count', 'view_count', 'agree_count', 'against_count', 'answer_users', 'topics', 'user_info');
         $article_key = array('post_type', 'id', 'title', 'message', 'add_time', 'views', 'votes', 'topics', 'user_info', 'outline', 'background_pic', 'url', 'category_id');
         $topics_key = array('topic_id', 'topic_title');
         $user_info_key = array('uid', 'user_name');
@@ -91,7 +91,9 @@ class explore extends AWS_CONTROLLER
                 $posts_list_key = $article_key;
 
                 if ($val['post_type'] == 'question') {
-                    $posts_list_key = $question_key;
+//                    $posts_list_key = $question_key;
+                    unset($posts_list[$key]);
+                    continue;
                 }
 
                 foreach ($val as $k => $v) {
@@ -124,12 +126,16 @@ class explore extends AWS_CONTROLLER
                     }
                 }
 
-                if ($posts_list[$key]['category_id'] != '') { //
+                if ($posts_list[$key]['category_id'] == '2') { //
                     $tmp = unserialize($posts_list[$key]['message']);
                     $posts_list[$key]['outline'] = $tmp['outline'];
-                    $posts_list[$key]['background_pic'] = $tmp['background_pic'];
+                    $posts_list[$key]['imgUrl'] = $tmp['imgUrl'];
                     $posts_list[$key]['url'] = $tmp['url'];
                     $posts_list[$key]['message'] = '';
+                } else {
+                    $posts_list[$key]['outline'] = null;
+                    $posts_list[$key]['imgUrl'] = null;
+                    $posts_list[$key]['url'] = null;
                 }
 
                 $posts_list[$key]['answer_users'] = array_values($posts_list[$key]['answer_users']);

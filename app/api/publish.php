@@ -13,6 +13,7 @@ class publish extends AWS_CONTROLLER
             //'publish_question',
             //'save_answer',
             //'save_comment'
+            'publish_article_by_url'
         );
         return $rule_action;
     }
@@ -603,17 +604,29 @@ class publish extends AWS_CONTROLLER
         }
     }
 
-
     public function publish_article_by_url_action() //
     {
+        if (!$this->user_id) {
+            H::ajax_json_output(AWS_APP::RSM(null, -1, AWS_APP::lang()->_t('请先登录或注册')));
+        }
+
+        if (!$this->user_info['permission']['publish_article']) {
+            H::ajax_json_output(AWS_APP::RSM(null, '-1', AWS_APP::lang()->_t('你没有权限发布文章')));
+        }
+
         $result = $this->model('myapi')->publish_article_by_url($_POST['url'], $this->user_id);
         switch ($result) {
-
+            case '-2':
+                H::ajax_json_output(AWS_APP::RSM(null, $result, AWS_APP::lang()->_t('请填写有效url')));
+                break;
+            case '-1':
+                H::ajax_json_output(AWS_APP::RSM(null, $result, AWS_APP::lang()->_t('发布文章失败')));
+                break;
+            default:
+                H::ajax_json_output(AWS_APP::RSM(array('article_id' => $result), 1, null));
+                break;
         }
-        H::ajax_json_output(AWS_APP::RSM(array(), 1, null));
-
     }
-
 
     function modify_article_action()
     {
