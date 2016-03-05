@@ -39,27 +39,39 @@ class home extends AWS_CONTROLLER
 
         //$data = $this->model('myhome')->home_activity($this->user_id, (intval($_GET['page']) * $this->per_page) . ", {$this->per_page}");
         if ($_GET['uid']) {
-            $data = $this->model('actions')->home_activity($_GET['uid'], (intval($_GET['page']) * $this->per_page) . ", {$this->per_page}");
+            $data = $this->model('actions')->get_user_actions($_GET['uid'], (intval($_GET['page']) * $this->per_page) . ", {$this->per_page}", '501,502,503', $this->user_id);
         } else {
             $data = $this->model('actions')->home_activity($this->user_id, (intval($_GET['page']) * $this->per_page) . ", {$this->per_page}");
         }
+
 
         if (!is_array($data)) {
             $data = array();
         } else {
             //$data_key = array('history_id', 'associate_action', 'user_info', 'answer_info', 'question_info', 'article_info', 'comment_info', 'add_time');
-            $data_key = array('history_id', 'associate_action', 'user_info','article_info', 'comment_info', 'add_time');
+            $data_key = array('history_id', 'uid', 'associate_action', 'user_info', 'article_info', 'comment_info', 'add_time');
             $user_info_key = array('uid', 'user_name', 'signature');
-            $article_info_key = array('id', 'title', 'message', 'comments', 'views', 'add_time', 'outline', 'background_pic', 'url', 'category_id');
+            $article_info_key = array('id', 'title', 'message', 'comments', 'views', 'add_time', 'outline', 'imgUrl', 'url', 'category_id');
             //$answer_info_key = array('answer_id', 'answer_content', 'add_time', 'against_count', 'agree_count');
             //$question_info_key = array('question_id', 'question_content', 'add_time', 'update_time', 'answer_count', 'agree_count');
 
             foreach ($data as $key => $val) {
+//                if($_GET['uid']) {
+//                    if ($data[$key]['uid'] != $_GET['uid']) {
+//                        unset($data[$key]);
+//                        continue;
+//                    }
+//                }
+
                 foreach ($val as $k => $v) {
                     if (!in_array($k, $data_key)) unset($data[$key][$k]);
                 }
 
                 if ($val['user_info']) {
+//                    if($val['user_info']['uid'] != $uid) {
+//                        unset($data[$key]);
+//                        break;
+//                    }
                     foreach ($val['user_info'] as $k => $v) {
                         if (!in_array($k, $user_info_key)) unset($data[$key]['user_info'][$k]);
                     }
@@ -85,16 +97,20 @@ class home extends AWS_CONTROLLER
 //                    }
 //                }
 
-                if ($data[$key]['category_id'] != '2') { //
-                    $tmp = unserialize($data[$key]['message']);
+                if ($data[$key]['article_info']['category_id'] == 2) { //
+                    $tmp = unserialize(htmlspecialchars_decode($data[$key]['article_info']['message']));
                     $data[$key]['outline'] = $tmp['outline'];
                     $data[$key]['imgUrl'] = $tmp['imgUrl'];
                     $data[$key]['url'] = $tmp['url'];
-                    $data[$key]['message'] = '';
+                    $data[$key]['article_info']['message'] = '';
                 } else {
-                    $data[$key]['outline'] = null;
-                    $data[$key]['imgUrl'] = null;
-                    $data[$key]['url'] = null;
+                    $data[$key]['outline'] = '';
+                    $data[$key]['imgUrl'] = $this->model('myapi')->get_image($data[$key]['article_info']['message']);
+                    $data[$key]['url'] = '';
+
+//                    if(cjk_strlen($data[$key]['article_info']['message']) > 130) {
+//                        $data[$key]['article_info']['message'] = cjk_substr(strip_ubb($data[$key]['article_info']['message']), 0, 130, 'UTF-8', '...');
+//                    }
                 }
             }
         }

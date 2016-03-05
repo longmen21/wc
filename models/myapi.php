@@ -167,8 +167,8 @@ class myapi_class extends AWS_MODEL
 
         $imgs = $body->find('img');
 
-        foreach($imgs as $p) {
-            if(!$p->src) {
+        foreach ($imgs as $p) {
+            if (!$p->src) {
                 $picUrl = $p->src;
             }
         }
@@ -177,14 +177,12 @@ class myapi_class extends AWS_MODEL
         if (!$filePath = $this->save_img($picUrl, $filePath)) { //
             return '-1'; //
         }
-        $article_id = $this->insert('article', array(
-            'uid' => $uid,
-            'title' => $title,
-            'message' => serialize(array('url' => $url, 'imgUrl' => $filePath, 'outline' => $outline)),
-            'category_id' => 2,
-            'add_time' => time(),
-            'is_recommend' => 1
-        ));
+
+        $article_id = $this->model('publish')->publish_article($title,
+            serialize(array('url' => $url, 'imgUrl' => $filePath, 'outline' => $outline)),
+            $uid, null, 2, null,
+            null);
+
         return $article_id;
     }
 
@@ -208,15 +206,30 @@ class myapi_class extends AWS_MODEL
         $finfo = new finfo(FILEINFO_MIME_TYPE);
         $mime_type = $finfo->buffer($img);
 
-        $ext = explode("/",$mime_type)[1];
+        $ext = explode("/", $mime_type)[1];
 
-        $ext_array = array('jpeg','jpg','gif','bmp','png','svg');
+        $ext_array = array('jpeg', 'jpg', 'gif', 'bmp', 'png', 'svg');
 
-        if(!in_array($ext,$ext_array)) {
+        if (!in_array($ext, $ext_array)) {
             $ext = 'png';
         }
 
         @file_put_contents($filepath . $filename . '.' . $ext, $img);
         return $filepath . $filename . '.' . $ext;
+    }ll
+
+    public function get_image($msg)
+    {
+        $imgUrl = '';
+        if (strstr($msg, 'attach')) {
+            $attachs = FORMAT::parse_attachs(FORMAT::parse_bbcode($msg), true);
+            $imgUrl = $this->model('publish')->get_attach_by_id($attachs[0])['attachment'];
+        } else if (strstr($msg, 'img')) {
+            preg_match_all('#\[img\]([\w]+?://[\w\#$%&~/.\-;:=,' . "'" . '?@\[\]+]*?)+$\[/img\]#is', $msg, $imgs);
+            $imgUrl = $imgs[1][0];
+        }
+
+        return $imgUrl == null ? '' : $imgUrl;
     }
+
 }

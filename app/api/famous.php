@@ -38,7 +38,7 @@ class famous extends AWS_CONTROLLER
     {
         $per_page = get_setting('contents_per_page');
         $limit = array();
-        $page = 0;
+        $page = 1;
 
         if ($_GET['per_page']) {
             $per_page = intval($_GET['per_page']);
@@ -48,7 +48,7 @@ class famous extends AWS_CONTROLLER
             $page = intval($_GET['page']);
         }
 
-        $limit[] = $page * $per_page;
+        $limit[] = ($page - 1) * $per_page;
         $limit[] = $per_page;
 
         $users = array_values($this->model('account')->get_users_list('group_id = 100', implode(',', $limit), $attrib = false, $exclude_self = false));

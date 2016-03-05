@@ -555,7 +555,6 @@ class publish extends AWS_CONTROLLER
             H::ajax_json_output(AWS_APP::RSM(null, '-1', AWS_APP::lang()->_t('你所在的用户组不允许发布站外链接')));
         }
 
-
         if (!is_array($_POST['topics'])) {
             $_POST['topics'] = explode(',', $_POST['topics']); //英文逗号隔开
         }
