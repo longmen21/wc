@@ -216,7 +216,7 @@ class myapi_class extends AWS_MODEL
 
         @file_put_contents($filepath . $filename . '.' . $ext, $img);
         return $filepath . $filename . '.' . $ext;
-    }ll
+    }
 
     public function get_image($msg)
     {
@@ -232,4 +232,21 @@ class myapi_class extends AWS_MODEL
         return $imgUrl == null ? '' : $imgUrl;
     }
 
+    public function get_user_comments($history_id)
+    {
+        $rs = $this->query_all('select b.id,b.message,b.add_time,b.votes
+from wecenter.aws_user_action_history a join wecenter.aws_article_comments b on a.add_time = b.add_time
+where a.history_id = ' . $history_id);
+        if ($rs[0]) {
+            $comments_info = array(
+                'id' => $rs[0]['id'],
+                'message' => $rs[0]['message'],
+                'add_time' => $rs[0]['add_time'],
+                'votes' => $rs[0]['votes']
+            );
+        } else {
+            $comments_info = array();
+        }
+        return $comments_info;
+    }
 }

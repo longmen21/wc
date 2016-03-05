@@ -44,7 +44,6 @@ class home extends AWS_CONTROLLER
             $data = $this->model('actions')->home_activity($this->user_id, (intval($_GET['page']) * $this->per_page) . ", {$this->per_page}");
         }
 
-
         if (!is_array($data)) {
             $data = array();
         } else {
@@ -62,6 +61,10 @@ class home extends AWS_CONTROLLER
 //                        continue;
 //                    }
 //                }
+
+                if ($data[$key]['associate_action'] == 503) {
+                    $data[$key]['comment_info'] = $this->model('myapi')->get_user_comments($data[$key]['history_id']);
+                }
 
                 foreach ($val as $k => $v) {
                     if (!in_array($k, $data_key)) unset($data[$key][$k]);
