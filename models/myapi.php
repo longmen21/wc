@@ -216,7 +216,7 @@ class myapi_class extends AWS_MODEL
 
         @file_put_contents($filepath . $filename . '.' . $ext, $img);
         return $filepath . $filename . '.' . $ext;
-    }ll
+    }
 
     public function get_image($msg)
     {
