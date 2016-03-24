@@ -111,14 +111,14 @@ class account extends AWS_CONTROLLER
             }
         }
 
+        $user_name = '';
+
         if (trim($_POST['user_name']) == '') {
             H::ajax_json_output(AWS_APP::RSM(null, -1, AWS_APP::lang()->_t('请输入用户名')));
         } else if ($this->model('account')->check_username($_POST['user_name'])) {
             H::ajax_json_output(AWS_APP::RSM(null, -1, AWS_APP::lang()->_t('用户名已经存在')));
-        } else if ($check_rs = $this->model('account')->check_username_char($_POST['user_name'])) {
+        } else if (!$user_name = trim($this->model('myapi')->register_name_check($_POST['user_name']))) {
             H::ajax_json_output(AWS_APP::RSM(null, -1, AWS_APP::lang()->_t('用户名包含无效字符')));
-        } else if ($this->model('account')->check_username_sensitive_words($_POST['user_name']) OR trim($_POST['user_name']) != $_POST['user_name']) {
-            H::ajax_json_output(AWS_APP::RSM(null, -1, AWS_APP::lang()->_t('用户名中包含敏感词或系统保留字')));
         }
 
         if ($this->model('account')->check_email($_POST['email'])) {
@@ -141,7 +141,7 @@ class account extends AWS_CONTROLLER
         // }
 
         if (get_setting('ucenter_enabled') == 'Y') {
-            $result = $this->model('ucenter')->register($_POST['user_name'], $_POST['password'], $_POST['email']);
+            $result = $this->model('ucenter')->register($user_name, $_POST['password'], $_POST['email']);
 
             if (is_array($result)) {
                 $uid = $result['user_info']['uid'];
@@ -149,7 +149,7 @@ class account extends AWS_CONTROLLER
                 H::ajax_json_output(AWS_APP::RSM(null, -1, $result));
             }
         } else {
-            $uid = $this->model('account')->user_register($_POST['user_name'], $_POST['password'], $_POST['email']);
+            $uid = $this->model('account')->user_register($user_name, $_POST['password'], $_POST['email']);
         }
 
         if ($_POST['email'] == $invitation['invitation_email']) {
@@ -171,7 +171,7 @@ class account extends AWS_CONTROLLER
             $this->model('follow')->user_follow_add($uid, $follow_users['uid']);
             $this->model('follow')->user_follow_add($follow_users['uid'], $uid);
 
-            $this->model('integral')->process($follow_users['uid'], 'INVITE', get_setting('integral_system_config_invite'), '邀请注册: ' . $_POST['user_name'], $follow_users['uid']);
+            $this->model('integral')->process($follow_users['uid'], 'INVITE', get_setting('integral_system_config_invite'), '邀请注册: ' . $user_name, $follow_users['uid']);
         }
 
         if ($_POST['icode']) {
@@ -192,7 +192,7 @@ class account extends AWS_CONTROLLER
             $valid_email = 0;
         }
 
-        $this->model('account')->setcookie_login($user_info['uid'], $user_info['user_name'], $_POST['password'], $user_info['salt']);
+        $this->model('account')->setcookie_login($user_info['uid'], $user_name, $_POST['password'], $user_info['salt']);
 
         H::ajax_json_output(AWS_APP::RSM(array(
             'uid' => $user_info['uid'],

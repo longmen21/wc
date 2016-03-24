@@ -53,6 +53,16 @@ class famous extends AWS_CONTROLLER
 
         $users = array_values($this->model('account')->get_users_list('group_id = 100', implode(',', $limit), $attrib = false, $exclude_self = false));
 
+        if(isset($users[0])) {
+            foreach($users as $uk => $uv) {
+                if ($this->user_id AND $this->model('follow')->user_follow_check($this->user_id, $uv['uid'])) {
+                    $users[$uk]['has_focus'] = 1;
+                } else {
+                    $users[$uk]['has_focus'] = 0;
+                }
+            }
+        }
+
         H::ajax_json_output(AWS_APP::RSM(array(
             'total_rows' => count($users),
             'rows' => $users
@@ -81,7 +91,6 @@ class famous extends AWS_CONTROLLER
 
         $posts_list = $this->model('myapi')->get_posts_list_by_uid(null, false, true, null, $_GET['page'], $per_page, $_GET['sort_type'], null, $category_info['id'], $_GET['answer_count'], $_GET['day'], $_GET['is_recommend']);
 
-        $question_key = array('post_type', 'question_id', 'question_content', 'add_time', 'answer_count', 'view_count', 'agree_count', 'against_count', 'answer_users', 'topics', 'user_info');
         $article_key = array('post_type', 'id', 'title', 'message', 'add_time', 'views', 'votes', 'topics', 'user_info');
         $topics_key = array('topic_id', 'topic_title');
         $user_info_key = array('uid', 'user_name');
@@ -89,10 +98,6 @@ class famous extends AWS_CONTROLLER
         if ($posts_list) {
             foreach ($posts_list as $key => $val) {
                 $posts_list_key = $article_key;
-
-                if ($val['post_type'] == 'question') {
-                    $posts_list_key = $question_key;
-                }
 
                 foreach ($val as $k => $v) {
                     if (!in_array($k, $posts_list_key)) unset($posts_list[$key][$k]);
@@ -124,16 +129,26 @@ class famous extends AWS_CONTROLLER
                     }
                 }
 
-                $posts_list[$key]['answer_users'] = array_values($posts_list[$key]['answer_users']);
+                if ($posts_list[$key]['category_id'] == '2') { //
+                    $tmp = unserialize(htmlspecialchars_decode($posts_list[$key]['message']));
+                    $posts_list[$key]['outline'] = $tmp['outline'];
+                    $posts_list[$key]['imgUrl'] = $tmp['imgUrl'];
+                    $posts_list[$key]['url'] = $tmp['url'];
+                    $posts_list[$key]['message'] = "";
+                } else {
+                    $posts_list[$key]['outline'] = null;
+                    $posts_list[$key]['imgUrl'] = $this->model('myapi')->get_image($posts_list[$key]['message']);
+                    $posts_list[$key]['url'] = null;
+                }
+
             }
         } else {
             $posts_list = array();
         }
 
-
         H::ajax_json_output(AWS_APP::RSM(array(
             'total_rows' => count($posts_list),
-            'rows' => $posts_list
+            'rows' => array_values($posts_list)
         ), 1, null));
     }
 

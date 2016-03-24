@@ -219,12 +219,12 @@ class people extends AWS_CONTROLLER
 			'user_name' => $user_info['user_name'],
 			'avatar_file' => get_avatar_url($user_info['uid'], 'mid'),
 			'signature' => $user_info['signature'],
-			'focus' => ($user_follow_check ? true : false),
+			'has_focus' => ($user_follow_check ? 1 : 0),
 			'is_me' => (($this->user_id == $user_info['uid']) ? true : false),
 			'url' => get_js_url('/people/' . $user_info['url_token']),
 			'category_enable' => ((get_setting('category_enable') == 'Y') ? 1 : 0),
 			'verified' => $user_info['verified'],
-			'fans_count' => $user_info['fans_count']
+			'fans_count' => $user_info['fans_count'],
 		));
 	}
 

@@ -13,7 +13,8 @@ class publish extends AWS_CONTROLLER
             //'publish_question',
             //'save_answer',
             //'save_comment'
-            'publish_article_by_url'
+            'publish_article_by_url',
+            'save_article'
         );
         return $rule_action;
     }
@@ -625,6 +626,52 @@ class publish extends AWS_CONTROLLER
                 H::ajax_json_output(AWS_APP::RSM(array('article_id' => $result), 1, null));
                 break;
         }
+    }
+
+    public function save_article_action()
+    {
+        //如果登录了，对比是否该用户
+        //如果是该用户，就直接进行发布，
+        //如果不是该用户，就退出，进行注册后登录，发布文章
+        //如果没登录，就进行注册后登录，发布文章
+        $flag = true;
+        if ($this->user_id) {
+            if ($this->user_info['user_name'] == $_POST['user_name']) {
+                $flag = false;
+            } else {
+                $this->model('account')->logout();
+            }
+        }
+
+        if ($flag) {
+            if (!$this->model('account')->check_username($_POST['user_name'])) {
+                $this->user_id = $this->model('account')->user_register($_POST['user_name'], '123', time() . '@example.com');
+                // authorizations
+                $this->model('active')->set_user_email_valid_by_uid($this->user_id);
+                // group allocations
+                $this->model('account')->update_users_fields(array('group_id' => 100, 'reputation_group' => 5, 'is_first_login' => 0), $this->user_id);
+                // first login
+                $this->user_info = $this->model('account')->check_login($_POST['user_name'], '123');
+                $this->model('account')->setcookie_login($this->user_id, $_POST['user_name'], '123', $this->user_info['salt'], null, false);
+                $this->model('account')->clean_first_login($this->user_id);
+                $this->model('account')->update_user_last_login($this->user_id);
+            } else {
+                $this->user_info = $this->model('account')->get_user_info_by_username($_POST['user_name']);
+            }
+        }
+
+        $article_id = $this->model('publish')->publish_article($_POST['title'], $_POST['message'], $this->user_info['uid'], null, 2);
+        if ($_POST['url']) {
+//            $this->shutdown_update('article', array('url' => $_POST['url']), ' id = ' . intval($article_id));
+            $flag = $this->model('myapi')->update_article($article_id, array('url' => $_POST['url']));
+        }
+
+        if ($article_id > 0 && $flag) {
+            H::ajax_json_output(AWS_APP::RSM(array('article_id' => $article_id), '1', AWS_APP::lang()->_t('发布成功')));
+        } else {
+            H::ajax_json_output(AWS_APP::RSM(null, '-1', AWS_APP::lang()->_t('发布失败')));
+        }
+
     }
 
     function modify_article_action()

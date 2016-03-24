@@ -53,7 +53,6 @@ class explore extends AWS_CONTROLLER
             }
         }
 
-
         if (!$_GET['sort_type'] AND !$_GET['is_recommend']) {
             $_GET['sort_type'] = 'new';
         }
@@ -80,7 +79,7 @@ class explore extends AWS_CONTROLLER
         }
 
 //        $question_key = array('post_type', 'question_id', 'question_content', 'add_time', 'answer_count', 'view_count', 'agree_count', 'against_count', 'answer_users', 'topics', 'user_info');
-        $article_key = array('post_type', 'id', 'title', 'message', 'add_time', 'views', 'votes', 'topics', 'user_info', 'outline', 'imgUrl', 'url', 'category_id');
+        $article_key = array('associate_type', 'post_type', 'id', 'title', 'message', 'add_time', 'views', 'votes', 'topics', 'user_info', 'outline', 'imgUrl', 'url', 'category_id');
         $topics_key = array('topic_id', 'topic_title');
         $user_info_key = array('uid', 'user_name');
 
@@ -100,6 +99,11 @@ class explore extends AWS_CONTROLLER
                 if ($val['user_info']) {
                     foreach ($val['user_info'] as $k => $v) {
                         if (!in_array($k, $user_info_key)) unset($posts_list[$key]['user_info'][$k]);
+                        if ($this->model('follow')->user_follow_check($this->user_id, $v['uid'])) {
+                            $posts_list[$key]['user_info']['has_focus'] = 1;
+                        } else {
+                            $posts_list[$key]['user_info']['has_focus'] = 0;
+                        }
                     }
 
                     $posts_list[$key]['user_info']['avatar_file'] = get_avatar_url($posts_list[$key]['user_info']['uid'], 'mid');
@@ -125,14 +129,13 @@ class explore extends AWS_CONTROLLER
 
                 if ($posts_list[$key]['category_id'] == '2') { //
                     $tmp = unserialize(htmlspecialchars_decode($posts_list[$key]['message']));
-                    $posts_list[$key]['outline'] = $tmp['outline'];
-                    $posts_list[$key]['imgUrl'] = $tmp['imgUrl'];
-                    $posts_list[$key]['url'] = $tmp['url'];
+                    $posts_list[$key]['outline'] = $tmp['outline'] ? $tmp['outline'] : "";
+                    $posts_list[$key]['imgUrl'] = $tmp['imgUrl'] ? 'http://' . $_SERVER['HTTP_HOST'] . '/' .$tmp['imgUrl'] : "";
+                    $posts_list[$key]['url'] = $tmp['url'] ? $tmp['url'] : "";
                     $posts_list[$key]['message'] = "";
                 } else {
                     $posts_list[$key]['outline'] = null;
                     $posts_list[$key]['imgUrl'] = $this->model('myapi')->get_image($posts_list[$key]['message']);
-                    $posts_list[$key]['url'] = null;
                 }
             }
         } else {

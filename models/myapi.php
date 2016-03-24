@@ -2,7 +2,7 @@
 if (!defined('IN_ANWSION')) {
     die;
 }
-require_once 'simple_html_dom.php';
+include 'phpQuery/phpQuery.php';
 
 class myapi_class extends AWS_MODEL
 {
@@ -157,41 +157,91 @@ class myapi_class extends AWS_MODEL
 
     public function publish_article_by_url($url = false, $uid = false)
     {
-        if ($this->ping_url($url)) {
+        $pics = array();
+        if (!$url = $this->ping_url($url)) {
             return '-2'; //
         }
-        $body = file_get_html($url);
-        $title = $body->find('title')[0]->plaintext; //
 
-        $outline = $title . '...';
-
-        $imgs = $body->find('img');
-
-        foreach ($imgs as $p) {
-            if (!$p->src) {
-                $picUrl = $p->src;
-            }
+        phpQuery::newDocumentFile($url);
+        $title = pq('title')->text();
+        if (!$outline = pq('meta[name=description]')->attr('content')) {
+            $outline = $title . '...';
         }
 
-        $filePath = 'uploads/share/'; //
-        if (!$filePath = $this->save_img($picUrl, $filePath)) { //
-            return '-1'; //
+        $imgs = pq('img');
+        $i = 0;
+        foreach ($imgs as $img) {
+            if ($i > 10) {
+                break;
+            }
+            if (pq($img)->attr('data-src')) {
+                $pic = pq($img)->attr('data-src');
+            } else {
+                $pic = pq($img)->attr('src');
+            }
+            if ($pic) {
+                $t = getimagesize($pic);
+                $pics[] = array($t[0], $t[1], $pic);
+            }
+            $i++;
+        }
+
+        if (count($pics) != 0) {
+//            var_dump($pics);
+//            exit;
+
+            $imgUrl = $this->select_max_img($pics);
+
+            if (strpos($imgUrl, 'http://') == -1) {
+                // $img_url = $img_url;
+                $domain_url = substr($url, 0, strpos($url, '/', 8) + 1);
+                $imgUrl = $domain_url . $imgUrl;
+            }
+//        echo $imgUrl;exit;
+
+            $filePath = 'uploads/share/'; //
+            if (!$picPath = $this->save_img($imgUrl, $filePath)) { //
+                return '-1'; //
+            }
+        } else {
+            $picPath = '';
         }
 
         $article_id = $this->model('publish')->publish_article($title,
-            serialize(array('url' => $url, 'imgUrl' => $filePath, 'outline' => $outline)),
+            serialize(array('url' => $url, 'imgUrl' => $picPath, 'outline' => $outline)),
             $uid, null, 2, null,
             null);
 
         return $article_id;
     }
 
+    private function select_max_img($pics)
+    {
+        $imgUrl = '';
+        if (isset($pics[0])) {
+            $great_size = $pics[0][0] * $pics[0][1];
+            $big = 0;
+            foreach ($pics as $pk => $pv) {
+                if ($pv[0] * $pv[1] > $great_size) {
+                    $big = $pk;
+                    $great_size = $pv[0] * $pv[1];
+                }
+            }
+            $imgUrl = $pics[$big][2];
+        }
+        return $imgUrl;
+    }
+
     private function ping_url($url = false)
     {
+        if (!strpos($url, '//')) {
+            $url = 'http://' . $url;
+        }
+
         if (@fopen($url, 'r')) {
-            return false;
+            return $url;
         } else {
-            return true;
+            return false;
         }
     }
 
@@ -200,22 +250,13 @@ class myapi_class extends AWS_MODEL
         @!is_dir($filepath) ? mkdir($filepath) : null;
         $filetime = time();
         $filename = date("YmdHis", $filetime) . rand(100, 999);
-
         $img = file_get_contents($url);
 
-        $finfo = new finfo(FILEINFO_MIME_TYPE);
-        $mime_type = $finfo->buffer($img);
+        $ext = image_type_to_extension(exif_imagetype($url));
 
-        $ext = explode("/", $mime_type)[1];
+        file_put_contents($filepath . $filename . $ext, $img);
 
-        $ext_array = array('jpeg', 'jpg', 'gif', 'bmp', 'png', 'svg');
-
-        if (!in_array($ext, $ext_array)) {
-            $ext = 'png';
-        }
-
-        @file_put_contents($filepath . $filename . '.' . $ext, $img);
-        return $filepath . $filename . '.' . $ext;
+        return $filepath . $filename . $ext;
     }
 
     public function get_image($msg)
@@ -225,10 +266,11 @@ class myapi_class extends AWS_MODEL
             $attachs = FORMAT::parse_attachs(FORMAT::parse_bbcode($msg), true);
             $imgUrl = $this->model('publish')->get_attach_by_id($attachs[0])['attachment'];
         } else if (strstr($msg, 'img')) {
-            preg_match_all('#\[img\]([\w]+?://[\w\#$%&~/.\-;:=,' . "'" . '?@\[\]+]*?)+$\[/img\]#is', $msg, $imgs);
-            $imgUrl = $imgs[1][0];
+            preg_match_all('#\[img\](.*)\[/img\]#', $msg, $imgs);
+            if (isset($imgs[1][0])) {
+                $imgUrl = $imgs[1][0];
+            }
         }
-
         return $imgUrl == null ? '' : $imgUrl;
     }
 
@@ -248,5 +290,90 @@ where a.history_id = ' . $history_id);
             $comments_info = array();
         }
         return $comments_info;
+    }
+
+    public function update_article($article_id, $data)
+    {
+        $this->shutdown_update('article', $data, ' id = ' . intval($article_id));
+        return true;
+    }
+
+    public function get_favorite_lists($uid, $limit = null)
+    {
+        $favorite_items = $this->fetch_all('favorite', "uid = " . intval($uid), 'item_id DESC', $limit);
+        if (!$favorite_items) {
+            return false;
+        }
+
+        foreach ($favorite_items as $key => $data) {
+            if ($data['type'] == 'article') {
+                $article_ids[] = $data['item_id'];
+            } else {
+                unset($favorite_items[$key]);
+                continue;
+            }
+        }
+
+        if ($article_ids) {
+            if ($article_infos = $this->model('article')->get_article_info_by_ids($article_ids)) {
+                foreach ($article_infos AS $key => $data) {
+                    $favorite_uids[$data['uid']] = $data['uid'];
+                }
+            }
+        }
+
+        $users_info = $this->model('account')->get_user_info_by_uids($favorite_uids);
+
+        foreach ($favorite_items as $key => $data) {
+            if ($data['type'] == 'article') {
+                $favorite_list_data[$key]['uid'] = $uid;
+                $favorite_list_data[$key]['associate_action'] = 504;
+                $favorite_list_data[$key]['title'] = $article_infos[$data['item_id']]['title'];
+                $favorite_list_data[$key]['link'] = get_js_url('/article/' . $data['item_id']);
+                $favorite_list_data[$key]['add_time'] = $favorite_items[$key]['time'];
+                $favorite_list_data[$key]['user_info'] = $users_info[$article_infos[$data['item_id']]['uid']];
+                $favorite_list_data[$key]['article_info'] = $article_infos[$data['item_id']];
+                $favorite_list_data[$key]['last_action_str'] = ACTION_LOG::format_action_data(ACTION_LOG::ADD_ARTICLE, $data['uid'], $users_info[$data['uid']]['user_name']);
+
+            }
+        }
+        return $favorite_list_data;
+    }
+
+    public function data_sort($data)
+    {
+        $cmp = function ($a, $b) {
+            if ($a['add_time'] == $b['add_time']) {
+                return 0;
+            } else {
+                return ($a['add_time'] < $b['add_time']) ? 1 : -1;
+            }
+        };
+        usort($data, $cmp);
+        return $data;
+    }
+
+    public function has_favorite_article($uid, $id)
+    {
+        $favorite = $this->fetch_all('favorite', "uid = " . intval($uid) . " and item_id = " . intval($id) . " and type = 'article'");
+        if (!empty($favorite)) {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    public function register_name_check($user_name)
+    {
+        if (is_digits($user_name)) {
+            return 'a' . $user_name;
+        }
+
+//        $sensitives = array('-', '.', '/', '%', '__', '_');
+
+//        $user_name = str_replace($sensitives, '', $user_name);
+        $preg = '#(\\\ue[0-9a-f]{3})#ie';
+        $boolPregRes = (preg_replace($preg, '', json_encode($user_name, true)));
+        return trim(json_decode($boolPregRes));
     }
 }
