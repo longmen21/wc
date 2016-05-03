@@ -11,10 +11,10 @@ class account extends AWS_CONTROLLER
         $rule_action['actions'] = array(
             'register_process',
             'login_process',
-            //'avatar_upload',
+//            'avatar_upload',
             'get_uid',
             'get_userinfo',
-            'logout'
+            'logout',
         );
         return $rule_action;
     }
@@ -72,6 +72,12 @@ class account extends AWS_CONTROLLER
                 $this->model('account')->setcookie_logout();
 
                 $this->model('account')->setcookie_login($user_info['uid'], $_POST['user_name'], $_POST['password'], $user_info['salt'], $expire);
+
+                if(empty($user_info['avatar_file'])) {
+                    if(isset($_POST['user_avatar'])) {
+                        $this->upload_user_avatar($user_info['uid'],$_POST['user_avatar']);
+                    }
+                }
 
                 $valid_email = 1;
                 $is_first_login = 0;
@@ -194,11 +200,16 @@ class account extends AWS_CONTROLLER
 
         $this->model('account')->setcookie_login($user_info['uid'], $user_name, $_POST['password'], $user_info['salt']);
 
-        H::ajax_json_output(AWS_APP::RSM(array(
-            'uid' => $user_info['uid'],
-            'user_name' => $user_info['user_name'],
-            'valid_email' => $valid_email
-        ), 1, null));
+        if($this->upload_user_avatar($user_info['uid'],$_POST['user_avatar'])) {
+            H::ajax_json_output(AWS_APP::RSM(array(
+                'uid' => $user_info['uid'],
+                'user_name' => $user_info['user_name'],
+                'valid_email' => $valid_email
+            ), 1, null));
+        } else {
+            H::ajax_json_output(AWS_APP::RSM(array(
+            ), 0, 'Register failed.'));
+        }
     }
 
 
@@ -241,9 +252,9 @@ class account extends AWS_CONTROLLER
         $user_info['isMedia'] = false;
         $user_info['isFamous'] = false;
 
-        if($user_info['group_id'] == 100) {
+        if ($user_info['group_id'] == 100) {
             $user_info['isMedia'] = true;
-        } else if($user_info['group_id'] == 101){
+        } else if ($user_info['group_id'] == 101) {
             $user_info['isFamous'] = true;
         }
 
@@ -275,6 +286,43 @@ class account extends AWS_CONTROLLER
         H::ajax_json_output(AWS_APP::RSM($user_info, 1, null));
     }
 
+    private function upload_user_avatar($uid, $user_avatar)
+    {
+        $file_path = get_setting('upload_dir') . '/avatar/' . $this->model('account')->get_avatar($uid, '', 1);
+        $file_name = $this->model('account')->get_avatar($uid, '', 2);
+
+        $full_path = $this->model('myapi')->save_img_by_name($user_avatar, $file_path, $file_name);
+
+        foreach (AWS_APP::config()->get('image')->avatar_thumbnail AS $key => $val) {
+            $thumb_file[$key] = $file_path . $this->model('account')->get_avatar($uid, $key, 2);
+
+            AWS_APP::image()->initialize(array(
+                'quality' => 90,
+                'source_image' => $full_path,
+                'new_image' => $thumb_file[$key],
+                'width' => $val['w'],
+                'height' => $val['h']
+            ))->resize();
+        }
+
+        $update_data['avatar_file'] = $this->model('account')->get_avatar($uid, null, 1) . basename($thumb_file['min']);
+
+        // 更新主表
+        $rs = $this->model('account')->update_users_fields($update_data, $uid);
+
+        if (!$this->model('integral')->fetch_log($uid, 'UPLOAD_AVATAR')) {
+            $this->model('integral')->process($uid, 'UPLOAD_AVATAR', round((get_setting('integral_system_config_profile') * 0.2)), '上传头像');
+        }
+//
+//        H::ajax_json_output(AWS_APP::RSM(array(
+//            'preview' => get_setting('upload_url') . '/avatar/' . $this->model('account')->get_avatar($uid, null, 1) . basename($thumb_file['max'])
+//        ), 1, null));
+        if($rs) {
+            return true;
+        } else {
+            return false;
+        }
+    }
 
     function avatar_upload_action()
     {

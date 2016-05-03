@@ -1,248 +1,356 @@
 <?php
-if (!defined('IN_ANWSION'))
-{
-	die;
+if (!defined('IN_ANWSION')) {
+    die;
 }
 
 class topic extends AWS_CONTROLLER
 {
-	public function get_access_rule()
-	{
-		$rule_action['rule_type'] = "white";	// 黑名单,黑名单中的检查  'white'白名单,白名单以外的检查
-		
-		
-		$rule_action['actions'][] = 'square';
-		$rule_action['actions'][] = 'topic';
-		$rule_action['actions'][] = 'topic_best_answer';
-		$rule_action['actions'][] = 'get_hot_topics';
-		$rule_action['actions'][] = 'hot_topics';
-	
-		
-		return $rule_action;
-	}
+    public function get_access_rule()
+    {
+        $rule_action['rule_type'] = "white";    // 黑名单,黑名单中的检查  'white'白名单,白名单以外的检查
 
 
-	public function setup()
-	{
-		//HTTP::no_cache_header();
+        $rule_action['actions'][] = 'square';
+        $rule_action['actions'][] = 'topic';
+        $rule_action['actions'][] = 'topic_best_answer';
+        $rule_action['actions'][] = 'get_hot_topics';
+        $rule_action['actions'][] = 'hot_topics';
+        $rule_action['actions'][] = 'get_topic_items';
 
-		if(! $this->model('myapi')->verify_signature(get_class(),$_GET['mobile_sign']))
-		{
-			H::ajax_json_output(AWS_APP::RSM(null, '-1', AWS_APP::lang()->_t('验签失败')));
-		}
-	}
+        return $rule_action;
+    }
+
+    public function setup()
+    {
+        //HTTP::no_cache_header();
+
+        if (!$this->model('myapi')->verify_signature(get_class(), $_GET['mobile_sign'])) {
+            H::ajax_json_output(AWS_APP::RSM(null, '-1', AWS_APP::lang()->_t('验签失败')));
+        }
+    }
+
+    public function get_topic_items_action()
+    {
+        $page = 1;
+
+        if ($_GET['per_page']) {
+            $per_page = intval($_GET['per_page']);
+        }
+
+        if ($_GET['page']) {
+            $page = intval($_GET['page']);
+            if ($page == 0) {
+                $page = 1;
+            }
+        }
+
+        if (is_digits($_GET['id'])) {
+            if (!$topic_info = $this->model('topic')->get_topic_by_id($_GET['id'])) {
+                $topic_info = $this->model('topic')->get_topic_by_title($_GET['id']);
+            }
+        } else if (!$topic_info = $this->model('topic')->get_topic_by_title($_GET['id'])) {
+            $topic_info = $this->model('topic')->get_topic_by_url_token($_GET['id']);
+        }
+
+        $related_topics_ids = array();
+
+        $page_keywords[] = $topic_info['topic_title'];
+
+        if ($related_topics = $this->model('topic')->related_topics($topic_info['topic_id'])) {
+            foreach ($related_topics AS $key => $val) {
+                $related_topics_ids[$val['topic_id']] = $val['topic_id'];
+
+                $page_keywords[] = $val['topic_title'];
+            }
+        }
+
+        if ($child_topic_ids = $this->model('topic')->get_child_topic_ids($topic_info['topic_id'])) {
+            foreach ($child_topic_ids AS $key => $topic_id) {
+                $related_topics_ids[$topic_id] = $topic_id;
+            }
+        }
+
+        $log_list = ACTION_LOG::get_action_by_event_id($topic_info['topic_id'], 10, ACTION_LOG::CATEGORY_TOPIC, implode(',', array(
+            ACTION_LOG::ADD_TOPIC,
+            ACTION_LOG::MOD_TOPIC,
+            ACTION_LOG::MOD_TOPIC_DESCRI,
+            ACTION_LOG::MOD_TOPIC_PIC,
+            ACTION_LOG::DELETE_TOPIC,
+            ACTION_LOG::ADD_RELATED_TOPIC,
+            ACTION_LOG::DELETE_RELATED_TOPIC
+        )), -1);
+
+        $log_list = $this->model('topic')->analysis_log($log_list);
+
+        $contents_topic_id = $topic_info['topic_id'];
+
+        if ($merged_topics = $this->model('topic')->get_merged_topic_ids($topic_info['topic_id'])) {
+            foreach ($merged_topics AS $key => $val) {
+                $merged_topic_ids[] = $val['source_id'];
+            }
+
+            $contents_topic_id .= ',' . implode(',', $merged_topic_ids);
+
+            if ($merged_topics_info = $this->model('topic')->get_topics_by_ids($merged_topic_ids)) {
+                foreach ($merged_topics_info AS $key => $val) {
+                    $merged_topic_title[] = $val['topic_title'];
+                }
+            }
+        }
+
+        $contents_related_topic_ids = array_merge($related_topics_ids, explode(',', $contents_topic_id));
+
+        $question_key = array('post_type', 'question_id', 'question_content', 'add_time', 'answer_count', 'view_count', 'agree_count', 'against_count', 'answer_users', 'topics', 'user_info');
+        $article_key = array('associate_type', 'post_type', 'id', 'title', 'message', 'add_time', 'views', 'votes', 'topics', 'user_info', 'outline', 'imgUrl', 'url', 'category_id');
+        $topics_key = array('topic_id', 'topic_title');
+        $user_info_key = array('uid', 'user_name');
+
+        $posts_list = $this->model('posts')->get_posts_list(null, $page, $per_page, 'new', $contents_related_topic_ids, null, null, 30, false);
+
+        if ($posts_list) {
+            foreach ($posts_list AS $key => $val) {
+                if ($val['answer_count']) {
+                    $posts_list[$key]['answer_users'] = $this->model('question')->get_answer_users_by_question_id($val['question_id'], 2, $val['published_uid']);
+                }
+
+                $posts_list_key = $article_key;
+
+                if($val['post_type'] == 'question')
+                {
+                    $posts_list_key = $question_key;
+                }
+
+                foreach ($val as $k => $v) {
+                    if (!in_array($k, $posts_list_key)) unset($posts_list[$key][$k]);
+                }
+
+                if ($val['user_info']) {
+                    foreach ($val['user_info'] as $k => $v) {
+                        if (!in_array($k, $user_info_key)) unset($posts_list[$key]['user_info'][$k]);
+                        if ($this->model('follow')->user_follow_check($this->user_id, $v['uid'])) {
+                            $posts_list[$key]['user_info']['has_focus'] = 1;
+                        } else {
+                            $posts_list[$key]['user_info']['has_focus'] = 0;
+                        }
+                    }
+
+                    $posts_list[$key]['user_info']['avatar_file'] = get_avatar_url($posts_list[$key]['user_info']['uid'], 'mid');
+                }
+
+                if (is_array($val['topics'])) {
+                    foreach ($val['topics'] as $kk => $vv) {
+                        foreach ($vv as $k => $v) {
+                            if (!in_array($k, $topics_key)) unset($posts_list[$key]['topics'][$kk][$k]);
+                        }
+                    }
+                }
+
+                if (is_array($val['answer_users'])) {
+                    foreach ($val['answer_users'] as $kk => $vv) {
+                        foreach ($vv as $k => $v) {
+                            if (!in_array($k, $user_info_key)) unset($posts_list[$key]['answer_users'][$kk][$k]);
+                        }
+                        $posts_list[$key]['answer_users'][$kk]['avatar_file'] = get_avatar_url($posts_list[$key]['answer_users'][$kk]['uid'], 'mid');
+                    }
+                }
+
+                if (is_null($posts_list[$key]['url'])) {
+                    $data[$key]['url'] = "";
+                }
+
+                if ($posts_list[$key]['category_id'] == '2') { //
+//                    $tmp = unserialize(htmlspecialchars_decode($posts_list[$key]['message']));
+                    $posts_list[$key]['outline'] = $posts_list[$key]['outline'] ? $posts_list[$key]['outline'] : "";
+//                    $posts_list[$key]['imgUrl'] = $tmp['imgUrl'] ? 'http://' . $_SERVER['HTTP_HOST'] . '/' .$tmp['imgUrl'] : "";
+//                    $posts_list[$key]['url'] = $tmp['url'] ? $tmp['url'] : $posts_list[$key]['url'];
+                    $posts_list[$key]['imgUrl'] = $posts_list[$key]['imgUrl'] ? 'http://' . $_SERVER['HTTP_HOST'] . '/' . $posts_list[$key]['imgUrl'] : "";
+                } else {
+                    $posts_list[$key]['outline'] = "";
+                    $posts_list[$key]['imgUrl'] = $this->model('myapi')->get_image($posts_list[$key]['message']);
+                }
+            }
+        }
+
+        H::ajax_json_output(AWS_APP::RSM(array(
+            'total_rows' => count($posts_list),
+            'rows' => array_values($posts_list)
+        ), 1, null));
+    }
+
+    public function get_hot_topics_action()
+    {
+        $ret = $this->model('topic')->get_hot_topics();
+
+        H::ajax_json_output(AWS_APP::RSM($ret, 1, null));
+    }
 
 
-	public function get_hot_topics_action()
-	{		
-		$ret = $this->model('topic')->get_hot_topics();
-		
-		H::ajax_json_output(AWS_APP::RSM($ret, 1, null));
-	}
+    public function hot_topics_action()
+    {
+        switch ($_GET['day']) {
+            case 'month':
+                $order = 'discuss_count_last_month DESC';
+                break;
+
+            case 'week':
+                $order = 'discuss_count_last_week DESC';
+                break;
+
+            default:
+                $order = 'discuss_count DESC';
+                break;
+        }
+
+        $cache_key = 'square_hot_topic_list' . md5($order) . '_' . intval($_GET['page']);
+
+        if (!$topics_list = AWS_APP::cache()->get($cache_key)) {
+            if ($topics_list = $this->model('topic')->get_topic_list(null, $order, 20, $_GET['page'])) {
+                $topics_list_total_rows = $this->model('topic')->found_rows();
+
+                AWS_APP::cache()->set('square_hot_topic_list_total_rows', $topics_list_total_rows, get_setting('cache_level_low'));
+            }
+
+            AWS_APP::cache()->set($cache_key, $topics_list, get_setting('cache_level_low'));
+        } else {
+            $topics_list_total_rows = AWS_APP::cache()->get('square_hot_topic_list_total_rows');
+        }
+
+        if ($topics_list) {
+            foreach ($topics_list as $key => $val) {
+                if ($val['topic_pic']) {
+                    $topics_list[$key]['topic_pic'] = get_setting('upload_url') . '/topic/' . $val['topic_pic'];
+                }
+            }
+        }
+
+        H::ajax_json_output(AWS_APP::RSM(array(
+            'total_rows' => count($topics_list),
+            'rows' => $topics_list
+        ), 1, null));
+    }
 
 
-	public function hot_topics_action()
-	{
-		switch ($_GET['day'])
-		{
-			case 'month':
-				$order = 'discuss_count_last_month DESC';
-			break;
+    public function topic_action()
+    {
+        if (is_numeric($_GET['id'])) {
+            if (!$topic_info = $this->model('topic')->get_topic_by_id($_GET['id'])) {
+                $topic_info = $this->model('topic')->get_topic_by_title($_GET['id']);
+            }
+        } else if (!$topic_info = $this->model('topic')->get_topic_by_title($_GET['id'])) {
+            $topic_info = $this->model('topic')->get_topic_by_url_token($_GET['id']);
+        }
 
-			case 'week':
-				$order = 'discuss_count_last_week DESC';
-			break;
+        if (!$topic_info) {
+            H::ajax_json_output(AWS_APP::RSM(null, -1, AWS_APP::lang()->_t('话题不存在')));
+        }
 
-			default:
-				$order = 'discuss_count DESC';
-			break;
-		}
+        if ($topic_info['merged_id'] AND $topic_info['merged_id'] != $topic_info['topic_id']) {
+            if ($this->model('topic')->get_topic_by_id($topic_info['merged_id'])) {
+                $topic_info = $this->model('topic')->get_topic_by_id($topic_info['merged_id']);
+                $topic_info['merged_tip'] = "您查看的话题已被合并到当前话题";
+            } else {
+                $this->model('topic')->remove_merge_topic($topic_info['topic_id'], $topic_info['merged_id']);
+            }
+        }
 
-		$cache_key = 'square_hot_topic_list' . md5($order) . '_' . intval($_GET['page']);
+        //此话题的最佳回答者
+        //TPL::assign('best_answer_users', $this->model('topic')->get_best_answer_users_by_topic_id($topic_info['topic_id'], 5));
 
-		if (!$topics_list = AWS_APP::cache()->get($cache_key))
-		{
-			if ($topics_list = $this->model('topic')->get_topic_list(null, $order, 20, $_GET['page']))
-			{
-				$topics_list_total_rows = $this->model('topic')->found_rows();
+        $topic_info['has_focus'] = 0;
 
-				AWS_APP::cache()->set('square_hot_topic_list_total_rows', $topics_list_total_rows, get_setting('cache_level_low'));
-			}
+        if ($this->user_id AND $this->model('topic')->has_focus_topic($this->user_id, $topic_info['topic_id'])) {
+            $topic_info['has_focus'] = 1;
+        }
 
-			AWS_APP::cache()->set($cache_key, $topics_list, get_setting('cache_level_low'));
-		}
-		else
-		{
-			$topics_list_total_rows = AWS_APP::cache()->get('square_hot_topic_list_total_rows');
-		}
+        if ($topic_info['topic_pic']) {
+            $topic_info['topic_pic'] = get_setting('upload_url') . '/topic/' . $topic_info['topic_pic'];
+        }
 
-		if($topics_list)
-		{
-			foreach ($topics_list as $key => $val)
-			{
-				if($val['topic_pic'])
-				{
-					$topics_list[$key]['topic_pic'] = get_setting('upload_url').'/topic/'.$val['topic_pic'];
-				}
-			}
-		}
+        $topic_info['topic_description'] = nl2br(FORMAT::parse_markdown($topic_info['topic_description']));
 
-		H::ajax_json_output(AWS_APP::RSM(array(
-				'total_rows' => count( $topics_list ),
-				'rows' => $topics_list
-		), 1, null));
-	}
+        H::ajax_json_output(AWS_APP::RSM($topic_info, 1, null));
+    }
 
+    //获取多个话题信息
+    public function topics_action()
+    {
+        if (!is_array($_POST['topics'])) {
+            $_POST['topics'] = explode(',', $_POST['topics']); //英文逗号隔开
+        }
 
-	public function topic_action()
-	{	
-		if (is_numeric($_GET['id']))
-		{
-			if (!$topic_info = $this->model('topic')->get_topic_by_id($_GET['id']))
-			{
-				$topic_info = $this->model('topic')->get_topic_by_title($_GET['id']);
-			}
-		}
-		else if (!$topic_info = $this->model('topic')->get_topic_by_title($_GET['id']))
-		{
-			$topic_info = $this->model('topic')->get_topic_by_url_token($_GET['id']);
-		}
-		
-		if (!$topic_info)
-		{
-			H::ajax_json_output(AWS_APP::RSM(null, -1, AWS_APP::lang()->_t('话题不存在')));
-		}
-		
-		if ($topic_info['merged_id'] AND $topic_info['merged_id'] != $topic_info['topic_id'])
-		{
-			if ($this->model('topic')->get_topic_by_id($topic_info['merged_id']))
-			{
-				$topic_info = $this->model('topic')->get_topic_by_id($topic_info['merged_id']);
-				$topic_info['merged_tip'] = "您查看的话题已被合并到当前话题";
-			}
-			else
-			{
-				$this->model('topic')->remove_merge_topic($topic_info['topic_id'], $topic_info['merged_id']);
-			}
-		}
-		
-		//此话题的最佳回答者
-		//TPL::assign('best_answer_users', $this->model('topic')->get_best_answer_users_by_topic_id($topic_info['topic_id'], 5));
-		
-		$topic_info['has_focus'] = 0;
+        if (!$_POST['topics']) {
+            H::ajax_json_output(AWS_APP::RSM(null, -1, AWS_APP::lang()->_t('参数错误')));
+        }
 
-		if ($this->user_id AND $this->model('topic')->has_focus_topic($this->user_id, $topic_info['topic_id']))
-		{
-			$topic_info['has_focus'] = 1;
-		}
+        if (!$topic_info = $this->model('topic')->get_topics_by_ids($_POST['topics'])) {
+            H::ajax_json_output(AWS_APP::RSM(null, -1, AWS_APP::lang()->_t('话题不存在')));
+        }
 
-		if($topic_info['topic_pic'])
-		{
-			$topic_info['topic_pic'] = get_setting('upload_url').'/topic/'.$topic_info['topic_pic'];
-		}
-		
-		$topic_info['topic_description'] = nl2br(FORMAT::parse_markdown($topic_info['topic_description']));
+        foreach ($topic_info as $key => $val) {
+            if ($val['topic_pic']) {
+                $topic_info[$key]['topic_pic'] = get_setting('upload_url') . '/topic/' . $val['topic_pic'];
+            }
 
-		H::ajax_json_output(AWS_APP::RSM($topic_info, 1, null));
-	}
+            $topic_info[$key]['has_focus'] = 0;
 
-	//获取多个话题信息
-	public function topics_action()
-	{	
-		if(!is_array($_POST['topics'])) 
-		{
-			$_POST['topics'] = explode(',',$_POST['topics']); //英文逗号隔开
-		}
+            if ($this->user_id AND $this->model('topic')->has_focus_topic($this->user_id, $val['topic_id'])) {
+                $topic_info[$key]['has_focus'] = 1;
+            }
 
-		if(!$_POST['topics'])
-		{
-			H::ajax_json_output(AWS_APP::RSM(null, -1, AWS_APP::lang()->_t('参数错误')));
-		}
-			
-		if (!$topic_info = $this->model('topic')->get_topics_by_ids($_POST['topics']))
-		{
-			H::ajax_json_output(AWS_APP::RSM(null, -1, AWS_APP::lang()->_t('话题不存在')));
-		}
+            $topic_info[$key]['topic_description'] = nl2br(FORMAT::parse_markdown($val['topic_description']));
+        }
 
-		foreach ($topic_info as $key => $val)
-		{
-			if($val['topic_pic'])
-			{
-				$topic_info[$key]['topic_pic'] = get_setting('upload_url').'/topic/'.$val['topic_pic'];
-			}
-
-			$topic_info[$key]['has_focus'] = 0;
-
-			if ($this->user_id AND $this->model('topic')->has_focus_topic($this->user_id, $val['topic_id']))
-			{
-				$topic_info[$key]['has_focus'] = 1;
-			}
-
-			$topic_info[$key]['topic_description'] = nl2br(FORMAT::parse_markdown($val['topic_description']));
-		}
-	
-		H::ajax_json_output(AWS_APP::RSM(array_values($topic_info), 1, null));
-	}
+        H::ajax_json_output(AWS_APP::RSM(array_values($topic_info), 1, null));
+    }
 
 
-	public function topic_best_answer_list_action()
-	{
-		if(! $_GET['topic_id'])
-		{
-			H::ajax_json_output(AWS_APP::RSM(null, -1, AWS_APP::lang()->_t('参数错误')));
-		}
-		
-		$_GET['page'] = $_GET['page'] ? ($_GET['page']-1) : 0;
-		
-		$action_list = $this->model('topic')->get_topic_best_answer_action_list(intval($_GET['topic_id']), $this->user_id, intval($_GET['page']) * get_setting('contents_per_page') . ', ' . get_setting('contents_per_page'));
-			
-		$question_info_key = array('question_id','question_content');
-		$answer_info_key = array('answer_id','answer_content','add_time','against_count','agree_count','comment_count','thanks_count','agree_status');
+    public function topic_best_answer_list_action()
+    {
+        if (!$_GET['topic_id']) {
+            H::ajax_json_output(AWS_APP::RSM(null, -1, AWS_APP::lang()->_t('参数错误')));
+        }
 
-		if($action_list)
-		{
-			foreach ($action_list as $key => $val)
-			{
-				foreach ($val as $kk => $vv)
-				{
-					if(! in_array($kk, array('question_info','user_info','answer_info'))) unset($action_list[$key][$kk]);
+        $_GET['page'] = $_GET['page'] ? ($_GET['page'] - 1) : 0;
 
-					if($kk == 'question_info')
-					{
-						foreach ($vv as $k => $v) 
-						{
-							if(!in_array($k, $question_info_key)) unset($action_list[$key][$kk][$k]);
-						}
-					}
+        $action_list = $this->model('topic')->get_topic_best_answer_action_list(intval($_GET['topic_id']), $this->user_id, intval($_GET['page']) * get_setting('contents_per_page') . ', ' . get_setting('contents_per_page'));
 
-					if($kk == 'user_info')
-					{
-						$action_list[$key][$kk] = $this->model('myapi')->get_clean_user_info($vv);
-					}
+        $question_info_key = array('question_id', 'question_content');
+        $answer_info_key = array('answer_id', 'answer_content', 'add_time', 'against_count', 'agree_count', 'comment_count', 'thanks_count', 'agree_status');
 
-					if($kk == 'answer_info')
-					{
-						foreach ($vv as $k => $v) 
-						{
-							if(!in_array($k, $answer_info_key)) unset($action_list[$key][$kk][$k]);
-						}
+        if ($action_list) {
+            foreach ($action_list as $key => $val) {
+                foreach ($val as $kk => $vv) {
+                    if (!in_array($kk, array('question_info', 'user_info', 'answer_info'))) unset($action_list[$key][$kk]);
 
-						$vv['answer_content'] = $this->model('question')->parse_at_user(FORMAT::parse_attachs(nl2br(FORMAT::parse_bbcode($vv['answer_content']))));
-						$action_list[$key][$kk]['answer_content']  = cjk_substr(trim(strip_tags($vv['answer_content'])),0,100);
+                    if ($kk == 'question_info') {
+                        foreach ($vv as $k => $v) {
+                            if (!in_array($k, $question_info_key)) unset($action_list[$key][$kk][$k]);
+                        }
+                    }
 
-					}
-				}
-			}
-		}
-		else
-		{
-			 $action_list = null;
-		}
+                    if ($kk == 'user_info') {
+                        $action_list[$key][$kk] = $this->model('myapi')->get_clean_user_info($vv);
+                    }
 
-		H::ajax_json_output(AWS_APP::RSM(array(
-					'total_rows' => count($action_list),
-					'rows' => array_values($action_list)
-				), 1, null));
-	}
+                    if ($kk == 'answer_info') {
+                        foreach ($vv as $k => $v) {
+                            if (!in_array($k, $answer_info_key)) unset($action_list[$key][$kk][$k]);
+                        }
+
+                        $vv['answer_content'] = $this->model('question')->parse_at_user(FORMAT::parse_attachs(nl2br(FORMAT::parse_bbcode($vv['answer_content']))));
+                        $action_list[$key][$kk]['answer_content'] = cjk_substr(trim(strip_tags($vv['answer_content'])), 0, 100);
+
+                    }
+                }
+            }
+        } else {
+            $action_list = null;
+        }
+
+        H::ajax_json_output(AWS_APP::RSM(array(
+            'total_rows' => count($action_list),
+            'rows' => array_values($action_list)
+        ), 1, null));
+    }
 
 }

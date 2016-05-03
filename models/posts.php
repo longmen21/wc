@@ -170,7 +170,7 @@ class posts_class extends AWS_MODEL
 		if ($topic_ids)
 		{
 			$posts_index = $this->get_posts_list_by_topic_ids($post_type, $post_type, $topic_ids, $category_id, $answer_count, $order_key, $is_recommend, $page, $per_page);
-		}
+        }
 		else
 		{
 			$where = array();

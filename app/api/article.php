@@ -71,7 +71,7 @@ class article extends AWS_CONTROLLER
 
         $this->model('article')->article_vote($_POST['type'], $_POST['item_id'], $_POST['rating'], $this->user_id, $reputation_factor, $item_info['uid']);
 
-        H::ajax_json_output(AWS_APP::RSM(null, 1, null));
+        H::ajax_json_output(AWS_APP::RSM($_POST['item_id'], 1, null));
     }
 
     //获取用户收藏的文章列表
@@ -374,4 +374,5 @@ class article extends AWS_CONTROLLER
 
         TPL::output('article/square');
     }
+
 }

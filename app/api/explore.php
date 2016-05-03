@@ -29,6 +29,7 @@ class explore extends AWS_CONTROLLER
     //GET: category(选),per_page(选，默认:10),sort_type([new,hot]选,默认:最新),page(默认1),day(默认30),is_recommend
     public function index_action()
     {
+        $page = 1;
         $per_page = get_setting('contents_per_page');
         $isMedia = false;
         $isFamous = false;
@@ -43,6 +44,13 @@ class explore extends AWS_CONTROLLER
 
         if ($_GET['per_page']) {
             $per_page = intval($_GET['per_page']);
+        }
+
+        if ($_GET['page']) {
+            $page = intval($_GET['page']);
+            if ($page == 0) {
+                $page = 1;
+            }
         }
 
         if ($_GET['category']) {
@@ -61,12 +69,12 @@ class explore extends AWS_CONTROLLER
 //                                          $category_id = null, $answer_count = null, $day = 30, $is_recommend = false)
 
         if ($_GET['uid'] || $isFamous || $isMedia) {
-            $posts_list = $this->model('myapi')->get_posts_list_by_uid($_GET['uid'], $isMedia, $isFamous, null, $_GET['page'], $per_page, $_GET['sort_type'], null, $category_info['id'], $_GET['answer_count'], $_GET['day'], $_GET['is_recommend']);
+            $posts_list = $this->model('myapi')->get_posts_list_by_uid($_GET['uid'], $isMedia, $isFamous, null, $page, $per_page, $_GET['sort_type'], null, $category_info['id'], $_GET['answer_count'], $_GET['day'], $_GET['is_recommend']);
         } else {
             if ($_GET['sort_type'] == 'hot') {
-                $posts_list = $this->model('posts')->get_hot_posts(null, $category_info['id'], null, $_GET['day'], $_GET['page'], $per_page);
+                $posts_list = $this->model('posts')->get_hot_posts(null, $category_info['id'], null, $_GET['day'], $page, $per_page);
             } else {
-                $posts_list = $this->model('posts')->get_posts_list(null, $_GET['page'], $per_page, $_GET['sort_type'], null, $category_info['id'], $_GET['answer_count'], $_GET['day'], $_GET['is_recommend']);
+                $posts_list = $this->model('posts')->get_posts_list(null, $page, $per_page, $_GET['sort_type'], null, $category_info['id'], $_GET['answer_count'], $_GET['day'], $_GET['is_recommend']);
             }
 
             if ($posts_list) {
@@ -122,19 +130,22 @@ class explore extends AWS_CONTROLLER
                         foreach ($vv as $k => $v) {
                             if (!in_array($k, $user_info_key)) unset($posts_list[$key]['answer_users'][$kk][$k]);
                         }
-
                         $posts_list[$key]['answer_users'][$kk]['avatar_file'] = get_avatar_url($posts_list[$key]['answer_users'][$kk]['uid'], 'mid');
                     }
                 }
 
+                if (is_null($posts_list[$key]['url'])) {
+                    $data[$key]['url'] = "";
+                }
+
                 if ($posts_list[$key]['category_id'] == '2') { //
-                    $tmp = unserialize(htmlspecialchars_decode($posts_list[$key]['message']));
-                    $posts_list[$key]['outline'] = $tmp['outline'] ? $tmp['outline'] : "";
-                    $posts_list[$key]['imgUrl'] = $tmp['imgUrl'] ? 'http://' . $_SERVER['HTTP_HOST'] . '/' .$tmp['imgUrl'] : "";
-                    $posts_list[$key]['url'] = $tmp['url'] ? $tmp['url'] : "";
-                    $posts_list[$key]['message'] = "";
+//                    $tmp = unserialize(htmlspecialchars_decode($posts_list[$key]['message']));
+                    $posts_list[$key]['outline'] = $posts_list[$key]['outline'] ? $posts_list[$key]['outline'] : "";
+//                    $posts_list[$key]['imgUrl'] = $tmp['imgUrl'] ? 'http://' . $_SERVER['HTTP_HOST'] . '/' .$tmp['imgUrl'] : "";
+//                    $posts_list[$key]['url'] = $tmp['url'] ? $tmp['url'] : $posts_list[$key]['url'];
+                    $posts_list[$key]['imgUrl'] = $posts_list[$key]['imgUrl'] ? 'http://' . $_SERVER['HTTP_HOST'] . '/' . $posts_list[$key]['imgUrl'] : "";
                 } else {
-                    $posts_list[$key]['outline'] = null;
+                    $posts_list[$key]['outline'] = "";
                     $posts_list[$key]['imgUrl'] = $this->model('myapi')->get_image($posts_list[$key]['message']);
                 }
             }

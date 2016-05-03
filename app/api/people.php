@@ -52,7 +52,7 @@ class people extends AWS_CONTROLLER
 
 
         //工作经历
-        
+
 		$jobs_list = $this->model('work')->get_jobs_list();
 
 		if ($work_experience_list = $this->model('work')->get_work_experience_list($user['uid']))
@@ -62,7 +62,7 @@ class people extends AWS_CONTROLLER
 				$work_experience_list[$key]['job_name'] = $jobs_list[$val['job_id']];
 			}
 		}
-		
+
 
 
 		if( $this->model('follow')->user_follow_check($this->user_id, $user['uid']) )
@@ -78,21 +78,21 @@ class people extends AWS_CONTROLLER
 		$friends_list = $this->model('follow')->get_user_friends($user['uid'], 5);
 		$focus_topics = $this->model('topic')->get_focus_topic_list($user['uid'], 5);
 		*/
-		
+
 		//clean
 		if( !empty( $user ) )
 		{
 			$user_key = array( 'uid', 'user_name', 'name', 'company', 'work', 'avatar_file', 'sex', 'job_id', 'fans_count', 'friend_count', 'invite_count', 'question_count', 'news_count', 'article_count', 'answer_count', 'topic_focus_count', 'agree_count', 'thanks_count', 'reputation', 'draft_count', 'yue_count', 'province', 'signature', 'city' );
  			if($this->user_id == $user['uid'])
 			{
-				$user_key[] = 'mobile'; 
+				$user_key[] = 'mobile';
 			}
 
-			foreach ($user as $k => $v) 
+			foreach ($user as $k => $v)
 			{
 				if( !in_array($k, $user_key) ) unset( $user[$k] );
 			}
- 
+
 		}
 
 		//当前用户是否已关注该用户
@@ -108,12 +108,12 @@ class people extends AWS_CONTROLLER
 
 			unset($user['mobile']);
 		}
-		
+
 		if( !$this->user_id )
 		{
 			unset($user['mobile']);
 		}
-		
+
 
 		$user['avatar_file'] = get_avatar_url( $user['uid'], 'max' );
 
@@ -160,7 +160,7 @@ class people extends AWS_CONTROLLER
 					if(!in_array($k, $data_key)) unset($data[$key][$k]);
 				}
 
-				if($val['article_info']) 
+				if($val['article_info'])
 				{
 					foreach ($val['article_info'] as $k => $v)
 					{
@@ -168,7 +168,7 @@ class people extends AWS_CONTROLLER
 					}
 				}
 
-				if($val['answer_info']) 
+				if($val['answer_info'])
 				{
 					foreach ($val['answer_info'] as $k => $v)
 					{
@@ -176,7 +176,7 @@ class people extends AWS_CONTROLLER
 					}
 				}
 
-				if($val['question_info']) 
+				if($val['question_info'])
 				{
 					foreach ($val['question_info'] as $k => $v)
 					{
@@ -189,7 +189,7 @@ class people extends AWS_CONTROLLER
 		H::ajax_json_output(AWS_APP::RSM(array(
 					'total_rows' => count($data),
 					'rows' => array_values($data)
-			), 1, null));	
+			), 1, null));
 	}
 
     public function user_info_action()
@@ -231,7 +231,7 @@ class people extends AWS_CONTROLLER
 	public function follows_action()
 	{
 		$_GET['page'] = $_GET['page'] ? ($_GET['page']-1) : 0;
-		
+
 		switch ($_GET['type'])
 		{
 			case 'follows':
@@ -243,7 +243,7 @@ class people extends AWS_CONTROLLER
 			break;
 		}
 
-		if ($users_list AND $this->user_id)
+		if ($users_list)
 		{
 			foreach ($users_list as $key => $val)
 			{
@@ -256,18 +256,22 @@ class people extends AWS_CONTROLLER
 
 				foreach ($users_list as $key => $val)
 				{
-					$users_list[$key]['follow_check'] = $follow_checks[$val['uid']];
+                    if($follow_checks[$val['uid']]) {
+                        $users_list[$key]['follow_check'] = true;
+                    } else {
+                        $users_list[$key]['follow_check'] = false;
+                    }
 				}
 			}
 		}
 
-		
 
-		$user_key = array( 'uid', 'user_name', 'signature', 'reputation', 'agree_count', 'thanks_count' );
+
+		$user_key = array( 'uid', 'user_name', 'signature', 'reputation', 'agree_count', 'thanks_count','follow_check' );
 
 		if( !empty( $users_list ) )
 		{
-			foreach ($users_list as $key => $value) 
+			foreach ($users_list as $key => $value)
 			{
 				foreach ($value as $k => $v) {
 					if( !in_array($k, $user_key) ) unset( $value[$k] );
@@ -286,7 +290,7 @@ class people extends AWS_CONTROLLER
 	public function topics_action()
 	{
 		$_GET['page'] = $_GET['page'] ? ($_GET['page']-1) : 0;
-		
+
 		if(! $_GET['uid'])
 		{
 			 H::ajax_json_output(AWS_APP::RSM(null, -1, AWS_APP::lang()->_t('参数有误')));
@@ -308,7 +312,7 @@ class people extends AWS_CONTROLLER
 				foreach ($topic_list as $key => $val)
 				{
 					$topic_list[$key]['has_focus'] = $topic_focus[$val['topic_id']] ? 1 : 0;
-				
+
 					if($val['topic_pic'])
 					{
 						$topic_list[$key]['topic_pic'] = get_setting('upload_url').'/topic/'.$val['topic_pic'];

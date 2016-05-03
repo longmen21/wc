@@ -27,6 +27,9 @@ class home extends AWS_CONTROLLER
 
     public function index_action()
     {
+        $page = 1;
+        $per_page = get_setting('contents_per_page');
+
         if (!$this->user_id) {
             H::ajax_json_output(AWS_APP::RSM(null, -1, AWS_APP::lang()->_t('请先登录或注册')));
         }
@@ -37,18 +40,51 @@ class home extends AWS_CONTROLLER
             $per_page = intval($_GET['per_page']);
         }
 
+        if ($_GET['page']) {
+            $page = intval($_GET['page']);
+            if ($page == 0) {
+                $page = 1;
+            }
+        }
+
+
         //$data = $this->model('myhome')->home_activity($this->user_id, (intval($_GET['page']) * $this->per_page) . ", {$this->per_page}");
-        $limit = (intval($_GET['page']) * $per_page) . ", {$per_page}";
-        if ($_GET['uid']) {
-            $data = $this->model('actions')->get_user_actions($_GET['uid'], null, '501,502,503', $this->user_id);
-            $tmp = $this->model('myapi')->get_favorite_lists($_GET['uid']);
-            if (isset($tmp[0])) {
-                $data = array_merge($data, $tmp);
-                $data = $this->model('myapi')->data_sort($data);
-                $data = array_slice($data, intval($_GET['page']) * $per_page, $per_page);
+        $limit = ($page - 1) * $per_page . ", {$per_page}";
+        if (isset($_GET['type'])) {
+            switch ($_GET['type']) {
+                case 'zaidu':
+                    if ($_GET['uid']) {
+                        $data = $this->model('actions')->get_user_actions($_GET['uid'], null, '501', $this->user_id);
+                    } else {
+                        $data = $this->model('actions')->home_activity($this->user_id, $limit);
+                    }
+                    foreach ($data as $dk => $dv) {
+                        if ($dv['article_info']['category_id'] != 2) {
+                            unset($data[$dk]);
+                        }
+                    }
+                    $tmp = $this->model('myapi')->get_favorite_lists($_GET['uid']);
+                    if (isset($tmp[0])) {
+                        $data = array_merge($data, $tmp);
+                        $data = $this->model('myapi')->data_sort($data);
+                    }
+                    $data = array_slice($data, ($page - 1) * $per_page, $per_page);
+                    break;
+                default:
+                    break;
             }
         } else {
-            $data = $this->model('actions')->home_activity($this->user_id, $limit);
+            if ($_GET['uid']) {
+                $data = $this->model('actions')->get_user_actions($_GET['uid'], null, '501,502,503', $this->user_id);
+                $tmp = $this->model('myapi')->get_favorite_lists($_GET['uid']);
+                if (isset($tmp[0])) {
+                    $data = array_merge($data, $tmp);
+                    $data = $this->model('myapi')->data_sort($data);
+                }
+                $data = array_slice($data, ($page - 1) * $per_page, $per_page);
+            } else {
+                $data = $this->model('actions')->home_activity($this->user_id, $limit);
+            }
         }
 
         if (!is_array($data)) {
@@ -72,6 +108,7 @@ class home extends AWS_CONTROLLER
 //                    unset($data[$key]);
 //                        continue;
 //                }
+
                 if ($val['associate_action'] == 503) {
                     $data[$key]['comment_info'] = $this->model('myapi')->get_user_comments($data[$key]['history_id']);
                 }
@@ -123,14 +160,19 @@ class home extends AWS_CONTROLLER
 //                    }
 //                }
 
+                if (is_null($data[$key]['article_info']['url'])) {
+                    $data[$key]['url'] = "";
+                }
+
                 if ($data[$key]['article_info']['category_id'] == 2) { //
-                    $tmp = unserialize(htmlspecialchars_decode($data[$key]['article_info']['message']));
-                    $data[$key]['outline'] = $tmp['outline'] ? $tmp['outline'] : "";
-                    $data[$key]['imgUrl'] = $tmp['imgUrl'] ? 'http://' . $_SERVER['HTTP_HOST'] . '/' .$tmp['imgUrl'] : "";
-                    $data[$key]['url'] = $tmp['url'] ? $tmp['url'] : "";
-                    $data[$key]['article_info']['message'] = '';
+//                    $tmp = unserialize(htmlspecialchars_decode($data[$key]['article_info']['message']));
+                    $data[$key]['outline'] = $data[$key]['article_info']['outline'] ? $data[$key]['article_info']['outline'] : "";
+//                    $data[$key]['imgUrl'] = $tmp['imgUrl'] ? 'http://' . $_SERVER['HTTP_HOST'] . '/' . $tmp['imgUrl'] : "";
+                    $data[$key]['url'] = $data[$key]['article_info']['url'] ? $data[$key]['article_info']['url'] : $data[$key]['url'];
+//                    $data[$key]['article_info']['message'] = '';
+                    $data[$key]['imgUrl'] = $data[$key]['article_info']['imgUrl'] ? 'http://' . $_SERVER['HTTP_HOST'] . '/' . $data[$key]['article_info']['imgUrl'] : "";
                 } else {
-                    $data[$key]['outline'] = '';
+                    $data[$key]['outline'] = "";
                     $data[$key]['imgUrl'] = $this->model('myapi')->get_image($data[$key]['article_info']['message']);
 //
 ////                    if(cjk_strlen($data[$key]['article_info']['message']) > 130) {

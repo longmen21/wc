@@ -630,10 +630,6 @@ class publish extends AWS_CONTROLLER
 
     public function save_article_action()
     {
-        //如果登录了，对比是否该用户
-        //如果是该用户，就直接进行发布，
-        //如果不是该用户，就退出，进行注册后登录，发布文章
-        //如果没登录，就进行注册后登录，发布文章
         $flag = true;
         if ($this->user_id) {
             if ($this->user_info['user_name'] == $_POST['user_name']) {
@@ -645,7 +641,7 @@ class publish extends AWS_CONTROLLER
 
         if ($flag) {
             if (!$this->model('account')->check_username($_POST['user_name'])) {
-                $this->user_id = $this->model('account')->user_register($_POST['user_name'], '123', time() . '@example.com');
+                $this->user_id = $this->model('account')->user_register($_POST['user_name'], '123', time() . mt_rand(0, 10) . '@zaidu.com');//
                 // authorizations
                 $this->model('active')->set_user_email_valid_by_uid($this->user_id);
                 // group allocations
@@ -661,10 +657,14 @@ class publish extends AWS_CONTROLLER
         }
 
         $article_id = $this->model('publish')->publish_article($_POST['title'], $_POST['message'], $this->user_info['uid'], null, 2);
-        if ($_POST['url']) {
+
 //            $this->shutdown_update('article', array('url' => $_POST['url']), ' id = ' . intval($article_id));
-            $flag = $this->model('myapi')->update_article($article_id, array('url' => $_POST['url']));
+        if (isset($_POST['imgUrl'])) {
+            $imgUrl = $_POST['imgUrl'];
+        } else {
+            $imgUrl = $this->model('myapi')->get_message_pic_url($_POST['message'], $_POST['url']);
         }
+        $flag = $this->model('myapi')->update_article($article_id, array('url' => $_POST['url'], 'imgUrl' => $imgUrl, 'outline' => $_POST['outline']));
 
         if ($article_id > 0 && $flag) {
             H::ajax_json_output(AWS_APP::RSM(array('article_id' => $article_id), '1', AWS_APP::lang()->_t('发布成功')));

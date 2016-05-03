@@ -207,10 +207,19 @@ class myapi_class extends AWS_MODEL
             $picPath = '';
         }
 
-        $article_id = $this->model('publish')->publish_article($title,
-            serialize(array('url' => $url, 'imgUrl' => $picPath, 'outline' => $outline)),
-            $uid, null, 2, null,
-            null);
+//        $article_id = $this->model('publish')->publish_article($title,
+//            serialize(array('imgUrl' => $picPath, 'outline' => $outline)),
+//            $uid, null, 2, null, null);
+//
+//        $this->update('article', array(
+//                'url' => $url),
+//            'id = ' . intval($article_id));
+
+        $article_id = $this->model('publish')->publish_article($title, '', $uid, null, 2, null, null);
+
+        $this->update('article', array(
+                'url' => $url, 'imgUrl' => $picPath, 'outline' => $outline),
+            'id = ' . intval($article_id));
 
         return $article_id;
     }
@@ -245,11 +254,23 @@ class myapi_class extends AWS_MODEL
         }
     }
 
-    private function save_img($url, $filepath)
+    public function save_img($url, $filepath)
     {
         @!is_dir($filepath) ? mkdir($filepath) : null;
         $filetime = time();
         $filename = date("YmdHis", $filetime) . rand(100, 999);
+        $img = file_get_contents($url);
+
+        $ext = image_type_to_extension(exif_imagetype($url));
+
+        file_put_contents($filepath . $filename . $ext, $img);
+
+        return $filepath . $filename . $ext;
+    }
+
+    public function save_img_by_name($url, $filepath, $filename)
+    {
+        @!is_dir($filepath) ? mkdir($filepath) : null;
         $img = file_get_contents($url);
 
         $ext = image_type_to_extension(exif_imagetype($url));
@@ -276,9 +297,13 @@ class myapi_class extends AWS_MODEL
 
     public function get_user_comments($history_id)
     {
+        $tmp = AWS_APP::config()->get('database')->master;
+        $dbname = $tmp['dbname'];
+
         $rs = $this->query_all('select b.id,b.message,b.add_time,b.votes
-from wecenter.aws_user_action_history a join wecenter.aws_article_comments b on a.add_time = b.add_time
+from ' . $dbname . '.aws_user_action_history a join ' . $dbname . '.aws_article_comments b on a.add_time = b.add_time
 where a.history_id = ' . $history_id);
+
         if ($rs[0]) {
             $comments_info = array(
                 'id' => $rs[0]['id'],
@@ -326,6 +351,7 @@ where a.history_id = ' . $history_id);
 
         foreach ($favorite_items as $key => $data) {
             if ($data['type'] == 'article') {
+                $favorite_list_data[$key]['history_id'] = $article_infos[$data['item_id']]['id'];
                 $favorite_list_data[$key]['uid'] = $uid;
                 $favorite_list_data[$key]['associate_action'] = 504;
                 $favorite_list_data[$key]['title'] = $article_infos[$data['item_id']]['title'];
@@ -334,7 +360,6 @@ where a.history_id = ' . $history_id);
                 $favorite_list_data[$key]['user_info'] = $users_info[$article_infos[$data['item_id']]['uid']];
                 $favorite_list_data[$key]['article_info'] = $article_infos[$data['item_id']];
                 $favorite_list_data[$key]['last_action_str'] = ACTION_LOG::format_action_data(ACTION_LOG::ADD_ARTICLE, $data['uid'], $users_info[$data['uid']]['user_name']);
-
             }
         }
         return $favorite_list_data;
@@ -375,5 +400,54 @@ where a.history_id = ' . $history_id);
         $preg = '#(\\\ue[0-9a-f]{3})#ie';
         $boolPregRes = (preg_replace($preg, '', json_encode($user_name, true)));
         return trim(json_decode($boolPregRes));
+    }
+
+    public function get_message_pic_url($message, $url = "")
+    {
+        $doc = phpQuery::newDocumentHTML($message);
+        phpQuery::selectDocument($doc);
+
+        $imgs = pq('img');
+        $i = 0;
+
+        foreach ($imgs as $img) {
+            if ($i > 10) {
+                break;
+            }
+            if (pq($img)->attr('data-src')) {
+                $pic = pq($img)->attr('data-src');
+            } else {
+                $pic = pq($img)->attr('src');
+            }
+            if ($pic) {
+                $t = getimagesize($pic);
+                $pics[] = array($t[0], $t[1], $pic);
+            }
+            $i++;
+        }
+
+
+        if (count($pics) != 0) {
+//            var_dump($pics);
+//            exit;
+
+            $imgUrl = $this->select_max_img($pics);
+
+            if (strpos($imgUrl, 'http://') == -1) {
+                // $img_url = $img_url;
+                $domain_url = substr($url, 0, strpos($url, '/', 8) + 1);
+                $imgUrl = $domain_url . $imgUrl;
+            }
+//        echo $imgUrl;exit;
+
+            $filePath = 'uploads/share/'; //
+            if (!$picPath = $this->save_img($imgUrl, $filePath)) { //
+                return '-1'; //
+            }
+        } else {
+            $picPath = '';
+        }
+
+        return $picPath;
     }
 }

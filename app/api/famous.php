@@ -46,12 +46,15 @@ class famous extends AWS_CONTROLLER
 
         if ($_GET['page']) {
             $page = intval($_GET['page']);
+            if ($page == 0) {
+                $page = 1;
+            }
         }
 
         $limit[] = ($page - 1) * $per_page;
         $limit[] = $per_page;
 
-        $users = array_values($this->model('account')->get_users_list('group_id = 100', implode(',', $limit), $attrib = false, $exclude_self = false));
+        $users = array_values($this->model('account')->get_users_list('group_id = 100', implode(',', $limit), $attrib = true, $exclude_self = false));
 
         if(isset($users[0])) {
             foreach($users as $uk => $uv) {
